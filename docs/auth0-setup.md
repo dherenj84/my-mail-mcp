@@ -113,6 +113,8 @@ Cloud Run through the `_AUTH_ISSUER_URL` and `_PUBLIC_BASE_URL` substitutions.
 - Optionally enforce the owner's `sub` in the server as a second layer.
 - Optionally define scopes (for example read vs. write mail tools) on the API, add
   them to the ChatGPT grant and enforce them per tool. Today any valid token for the
-  audience can use every tool.
+  audience can use every tool, including sending mail and permanent deletion. A
+  separate scope for `send_message`, `reply_message`, `forward_message` and
+  `permanently_delete_messages` is the most valuable one to add.
 - If you only use ChatGPT, consider removing the static `MCP_AUTH_TOKEN` fallback so
   Auth0 is the only way in.

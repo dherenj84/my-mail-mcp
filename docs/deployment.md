@@ -144,9 +144,15 @@ Cloud Run supplies `PORT`; do not configure it as a regular environment variable
 The service scales down to zero with a maximum setting of three by default,
 uses one CPU / 512 MiB per instance, and accepts up to ten simultaneous requests
 per instance. Adjust these explicit deployment settings for your workload.
-Optional `MAIL_ARCHIVE_FOLDER` and `MAIL_TRASH_FOLDER` overrides can be configured
+Optional `MAIL_ARCHIVE_FOLDER`, `MAIL_TRASH_FOLDER` and `MAIL_SENT_FOLDER` overrides can be configured
 on Cloud Run and are preserved across builds. Other compatible providers can
 supply different host, port, and credential references without source changes.
+
+The `send_message`, `reply_message` and `forward_message` tools use the same
+mailbox credentials over SMTP (`MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`,
+`MAIL_SMTP_STARTTLS`; defaults suit Yahoo). Cloud Run must be able to reach the
+SMTP port outbound, which it allows by default. Sending is untested against live
+Yahoo, so send a first test message to yourself.
 
 ## Client access and verification
 
