@@ -1,5 +1,6 @@
 import logging
 import ssl
+import sys
 import time
 from contextlib import contextmanager
 from email import policy
@@ -23,6 +24,7 @@ class MailService:
         # Each request owns its connection; instances share no mailbox state.
         context = ssl.create_default_context()
         context.load_verify_locations(cafile=certifi.where())
+        operation = sys._getframe(2).f_code.co_name
         started = time.perf_counter()
         with IMAPClient(
             self.settings.mail_imap_host,
@@ -41,7 +43,8 @@ class MailService:
             finally:
                 done = time.perf_counter()
                 logger.info(
-                    "imap connect_login=%.2fs work=%.2fs",
+                    "imap op=%s connect_login=%.2fs work=%.2fs",
+                    operation,
                     connected - started,
                     done - connected,
                 )
