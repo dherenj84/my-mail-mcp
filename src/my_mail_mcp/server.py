@@ -1,6 +1,11 @@
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
-from fastmcp.server.auth import StaticTokenVerifier
+from fastmcp.server.auth import (
+    MultiAuth,
+    RemoteAuthProvider,
+    StaticTokenVerifier,
+)
+from fastmcp.server.auth.providers.jwt import JWTVerifier
 from starlette.responses import JSONResponse
 
 from my_mail_mcp.config import Settings
@@ -9,8 +14,8 @@ from my_mail_mcp.mail.service import MailService
 from my_mail_mcp.tools.mailbox import register_mailbox_tools
 
 
-def create_server(settings: Settings) -> FastMCP:
-    auth = StaticTokenVerifier(
+def build_auth(settings: Settings):
+    static = StaticTokenVerifier(
         tokens={
             settings.mcp_auth_token.get_secret_value(): {
                 "client_id": "mail-owner",
@@ -18,6 +23,26 @@ def create_server(settings: Settings) -> FastMCP:
             }
         }
     )
+    if not settings.auth_issuer_url:
+        return static
+    issuer = settings.auth_issuer_url
+    base_url = settings.public_base_url.rstrip("/")
+    jwt_verifier = JWTVerifier(
+        jwks_uri=issuer.rstrip("/") + "/.well-known/jwks.json",
+        issuer=issuer,
+        audience=base_url + "/mcp",
+        algorithm="RS256",
+    )
+    oauth = RemoteAuthProvider(
+        token_verifier=jwt_verifier,
+        authorization_servers=[issuer],
+        base_url=base_url,
+    )
+    return MultiAuth(server=oauth, verifiers=[static])
+
+
+def create_server(settings: Settings) -> FastMCP:
+    auth = build_auth(settings)
     mcp = FastMCP(
         "My Mail MCP",
         auth=auth,

@@ -231,3 +231,90 @@ def test_http_mutation_requires_authentication(monkeypatch):
         assert response.status_code == 200
         assert not response.json()["result"].get("isError", False)
         operation.assert_called_once_with("INBOX", [7], 5, None, True, None)
+
+
+ISSUER = "https://tenant.example.us.auth0.com/"
+BASE_URL = "https://mail.example.run.app"
+
+
+def oauth_settings():
+    return Settings(
+        _env_file=None,
+        mail_username="test@yahoo.com",
+        mail_password="private-mail-password",
+        mcp_auth_token="x" * 32,
+        auth_issuer_url=ISSUER,
+        public_base_url=BASE_URL,
+    )
+
+
+def test_oauth_settings_must_be_complete_and_https():
+    base = {
+        "_env_file": None,
+        "mail_username": "test@yahoo.com",
+        "mail_password": "private-mail-password",
+        "mcp_auth_token": "x" * 32,
+    }
+    with pytest.raises(ValidationError):
+        Settings(**base, auth_issuer_url=ISSUER)
+    with pytest.raises(ValidationError):
+        Settings(**base, auth_issuer_url="http://a/", public_base_url="http://b")
+
+
+def test_oauth_jwt_validation_and_static_fallback(monkeypatch):
+    from fastmcp.server.auth.providers.jwt import JWTVerifier, RSAKeyPair
+    from starlette.testclient import TestClient
+
+    from my_mail_mcp import server as module
+
+    keys = RSAKeyPair.generate()
+    monkeypatch.setattr(
+        module,
+        "JWTVerifier",
+        lambda **kw: JWTVerifier(
+            public_key=keys.public_key,
+            **{k: v for k, v in kw.items() if k != "jwks_uri"},
+        ),
+    )
+    app = create_server(oauth_settings()).http_app(
+        stateless_http=True, json_response=True
+    )
+    audience = BASE_URL + "/mcp"
+
+    def call(token):
+        return client.post(
+            "/mcp/",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json, text/event-stream",
+                "MCP-Protocol-Version": "2025-11-25",
+            },
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+        ).status_code
+
+    good = keys.create_token(subject="user", issuer=ISSUER, audience=audience)
+    wrong_audience = keys.create_token(
+        subject="user", issuer=ISSUER, audience="https://other.example/mcp"
+    )
+    wrong_issuer = keys.create_token(
+        subject="user", issuer="https://evil.example/", audience=audience
+    )
+    expired = keys.create_token(
+        subject="user", issuer=ISSUER, audience=audience, expires_in_seconds=-60
+    )
+    forged = RSAKeyPair.generate().create_token(
+        subject="user", issuer=ISSUER, audience=audience
+    )
+    with TestClient(app) as client:
+        assert call(good) == 200
+        assert call("x" * 32) == 200
+        for bad in (wrong_audience, wrong_issuer, expired, forged, "garbage"):
+            assert call(bad) == 401
+        assert client.post("/mcp/", json={}).status_code == 401
+        metadata = client.get("/.well-known/oauth-protected-resource/mcp")
+        assert metadata.status_code == 200
+        body = metadata.json()
+        assert body["resource"] == audience
+        assert [s.rstrip("/") for s in body["authorization_servers"]] == [
+            ISSUER.rstrip("/")
+        ]

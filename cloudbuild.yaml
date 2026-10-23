@@ -54,7 +54,7 @@ steps:
       - --ingress=all
       # Cloud Run admits requests; FastMCP checks the application's bearer token.
       - --no-invoker-iam-check
-      - --update-env-vars=MAIL_IMAP_HOST=${_MAIL_IMAP_HOST},MAIL_IMAP_PORT=${_MAIL_IMAP_PORT}
+      - --update-env-vars=MAIL_IMAP_HOST=${_MAIL_IMAP_HOST},MAIL_IMAP_PORT=${_MAIL_IMAP_PORT},AUTH_ISSUER_URL=${_AUTH_ISSUER_URL},PUBLIC_BASE_URL=${_PUBLIC_BASE_URL}
       - --update-secrets=MAIL_USERNAME=${_MAIL_USERNAME_SECRET},MAIL_PASSWORD=${_MAIL_PASSWORD_SECRET},MCP_AUTH_TOKEN=${_MCP_AUTH_TOKEN_SECRET}
       - --quiet
 
@@ -69,6 +69,8 @@ substitutions:
   _MAX_INSTANCES: '3'
   _MAIL_IMAP_HOST: imap.mail.yahoo.com
   _MAIL_IMAP_PORT: '993'
+  _AUTH_ISSUER_URL: https://dev-fh3rg5w3wwzzwzgs.us.auth0.com/
+  _PUBLIC_BASE_URL: https://my-mail-mcp-1080363999711.us-central1.run.app
   # Resolve the latest secret versions when Cloud Run instances start.
   _MAIL_USERNAME_SECRET: my-mail-mcp-username:latest
   _MAIL_PASSWORD_SECRET: my-mail-mcp-password:latest

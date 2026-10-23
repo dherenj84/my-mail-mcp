@@ -1,4 +1,4 @@
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +18,20 @@ class Settings(BaseSettings):
     mail_smtp_starttls: bool = False
     mcp_auth_token: SecretStr = Field(min_length=32)
     port: int = Field(default=8080, ge=1, le=65535)
+    # Both must be set to enable OAuth; the static bearer token keeps working.
+    auth_issuer_url: str | None = None
+    public_base_url: str | None = None
+
+    @model_validator(mode="after")
+    def require_complete_oauth_settings(self):
+        if bool(self.auth_issuer_url) != bool(self.public_base_url):
+            raise ValueError(
+                "Set both AUTH_ISSUER_URL and PUBLIC_BASE_URL to enable OAuth, or neither"
+            )
+        for url in (self.auth_issuer_url, self.public_base_url):
+            if url and not url.startswith("https://"):
+                raise ValueError("OAuth URLs must use https")
+        return self
 
     @field_validator("mail_password", "mcp_auth_token")
     @classmethod

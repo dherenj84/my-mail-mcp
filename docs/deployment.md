@@ -131,6 +131,8 @@ its generated default pipeline may otherwise bypass these checks and settings.
 | `_MAX_INSTANCES` | `3` | Cloud Run service maximum instance setting |
 | `_MAIL_IMAP_HOST` | `imap.mail.yahoo.com` | Provider's IMAP host |
 | `_MAIL_IMAP_PORT` | `993` | Provider's implicit TLS port |
+| `_AUTH_ISSUER_URL` | Auth0 tenant URL | OAuth issuer; see [Auth0 setup](auth0-setup.md) |
+| `_PUBLIC_BASE_URL` | Cloud Run service URL | Used to build the `/mcp` token audience |
 | `_MAIL_USERNAME_SECRET` | `my-mail-mcp-username:latest` | Secret name and version |
 | `_MAIL_PASSWORD_SECRET` | `my-mail-mcp-password:latest` | Secret name and version |
 | `_MCP_AUTH_TOKEN_SECRET` | `my-mail-mcp-token:latest` | Secret name and version |

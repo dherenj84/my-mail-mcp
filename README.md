@@ -155,6 +155,8 @@ ignored by Git. Ask Copilot to list folders, then read your latest email.
 | `MAIL_IMAP_PORT` | `993` | IMAP port, implicit TLS required |
 | `MAIL_ARCHIVE_FOLDER` | Auto-detected | Optional exact Archive folder override |
 | `MAIL_TRASH_FOLDER` | Auto-detected | Optional exact Trash folder override |
+| `AUTH_ISSUER_URL` | Unset | Auth0 issuer (with trailing slash); enables OAuth with `PUBLIC_BASE_URL` |
+| `PUBLIC_BASE_URL` | Unset | Public HTTPS base URL; tokens must have audience `<base>/mcp` |
 | `PORT` | `8080` | HTTP listening port |
 | `MAIL_SMTP_HOST` | `smtp.mail.yahoo.com` | Reserved for future sending |
 | `MAIL_SMTP_PORT` | `465` | Reserved for future sending |
@@ -180,6 +182,9 @@ authentication are separate layers; client access must be configured accordingly
 Registry, then deploys Cloud Run with Secret Manager references. Follow the
 [deployment guide](docs/deployment.md) for one-time setup and GitHub triggers.
 No GCP resources have been provisioned or deployed yet.
+
+OAuth for ChatGPT via Auth0 is documented in [Auth0 setup](docs/auth0-setup.md). The
+static bearer token keeps working alongside it.
 
 One mailbox per deployment. Change IMAP settings for another compatible provider;
 providers requiring OAuth need an additional authentication implementation.
