@@ -12,8 +12,10 @@ from starlette.responses import JSONResponse
 
 from my_mail_mcp.config import Settings
 from my_mail_mcp.mail.operations import MailboxOperations
+from my_mail_mcp.mail.sending import MailSender
 from my_mail_mcp.mail.service import MailService
 from my_mail_mcp.tools.mailbox import register_mailbox_tools
+from my_mail_mcp.tools.sending import register_sending_tools
 
 
 def build_auth(settings: Settings):
@@ -81,6 +83,7 @@ def create_server(settings: Settings) -> FastMCP:
             raise ToolError(str(exc)) from None
 
     register_mailbox_tools(mcp, MailboxOperations(service))
+    register_sending_tools(mcp, MailSender(service))
     return mcp
 
 

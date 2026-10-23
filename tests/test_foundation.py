@@ -60,6 +60,9 @@ def test_mcp_discovery():
                 "create_folder",
                 "rename_folder",
                 "delete_folder",
+                "send_message",
+                "reply_message",
+                "forward_message",
             }
             read_tools = {"list_folders", "search_messages", "read_message"}
             assert all(
@@ -124,7 +127,7 @@ def test_authenticated_http_discovery_and_tool_call(monkeypatch):
             },
         )
         assert response.status_code == 200
-        assert len(response.json()["result"]["tools"]) == 13
+        assert len(response.json()["result"]["tools"]) == 16
         response = client.post(
             "/mcp/",
             headers=headers,

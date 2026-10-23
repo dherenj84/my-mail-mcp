@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     mail_imap_port: int = Field(default=993, ge=1, le=65535)
     mail_archive_folder: str | None = None
     mail_trash_folder: str | None = None
+    mail_sent_folder: str | None = None
     mail_smtp_host: str = "smtp.mail.yahoo.com"
     mail_smtp_port: int = Field(default=465, ge=1, le=65535)
     mail_smtp_starttls: bool = False

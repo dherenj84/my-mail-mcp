@@ -13,10 +13,9 @@ Message references include folder, UID and UIDVALIDITY to reject stale identifie
 Attachment metadata is included; attachment downloads are not implemented yet.
 Search pagination bounds the returned data, but currently searches all matching UIDs.
 
-Planned: sending/replying/forwarding, drafts, attachment transfer, OAuth client authentication,
+Planned: drafts, attachment transfer, OAuth client authentication,
 and GitHub Actions deployment configuration. Cloud Build deployment is configured
-but not yet verified on GCP. SMTP settings are reserved
-for the next milestone. Yahoo reading has been manually verified locally through
+but not yet verified on GCP. Sending is implemented but untested against live Yahoo SMTP. Yahoo reading has been manually verified locally through
 VS Code Copilot. Mutation tools have automated coverage but have not been tested
 against a live Yahoo mailbox; other providers and Cloud Run remain unverified.
 
@@ -37,6 +36,14 @@ against a live Yahoo mailbox; other providers and Cloud Run remain unverified.
 | `create_folder` | `folder` | Creates a user folder |
 | `rename_folder` | `folder`, `new_name`, `uid_validity` | Renames a user folder without children |
 | `delete_folder` | `folder`, `uid_validity` | Deletes an empty user folder without children |
+| `send_message` | `to`, `subject`, `body`, optional `cc`, `bcc` | Sends a plain-text email and saves a copy to Sent |
+| `reply_message` | `folder`, `uid`, `uid_validity`, `body`, optional `reply_all`, `cc` | Threaded reply quoting the original |
+| `forward_message` | `folder`, `uid`, `uid_validity`, `to`, optional `body`, `cc` | Inline forward; attachments are listed, not sent |
+
+Sending is irreversible. Tools advertise `destructiveHint` so clients can ask for
+confirmation; the server also limits messages to 20 recipients and rejects header
+injection. Set `MAIL_SENT_FOLDER` if the Sent folder is not detected. The sender
+is always the configured mailbox.
 
 Search returns newest UID first (mailbox arrival order, not necessarily the
 message's Date header). Search totals reflect the initial UID snapshot; messages
@@ -158,9 +165,9 @@ ignored by Git. Ask Copilot to list folders, then read your latest email.
 | `AUTH_ISSUER_URL` | Unset | Auth0 issuer (with trailing slash); enables OAuth with `PUBLIC_BASE_URL` |
 | `PUBLIC_BASE_URL` | Unset | Public HTTPS base URL; tokens must have audience `<base>/mcp` |
 | `PORT` | `8080` | HTTP listening port |
-| `MAIL_SMTP_HOST` | `smtp.mail.yahoo.com` | Reserved for future sending |
-| `MAIL_SMTP_PORT` | `465` | Reserved for future sending |
-| `MAIL_SMTP_STARTTLS` | `false` | Reserved for future sending |
+| `MAIL_SMTP_HOST` | `smtp.mail.yahoo.com` | Used for sending |
+| `MAIL_SMTP_PORT` | `465` | Used for sending |
+| `MAIL_SMTP_STARTTLS` | `false` | Used for sending |
 
 Environment variables take precedence over `.env`. IMAP certificate and hostname
 verification remain enabled, using system trust plus Certifi's CA bundle.
@@ -195,7 +202,7 @@ Yahoo/provider limits and cloud hosting charges still apply.
 Tests use mocked mailboxes and do not need Yahoo credentials. CI checks Python
 3.11/3.12, lint, formatting, package build, and Docker build. GitHub CI does not deploy or publish. The Cloud Build configuration deploys
 when explicitly submitted or attached to a configured trigger. Local Docker validation passed on Linux ARM64: all 68 tests in the builder
-container, non-root runtime, HTTP health/authentication, discovery of 13 tools,
+container, non-root runtime, HTTP health/authentication, discovery of the tools,
 and live Yahoo folder listing. No live mail mutations were tested. Cloud Run
 runtime validation remains pending.
 
