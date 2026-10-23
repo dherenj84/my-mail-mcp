@@ -109,6 +109,9 @@ traffic to it. It can incur build, storage, logging, secret and Cloud Run charge
 2. Connect the repository using Cloud Build's GitHub connection workflow.
 3. Create a push trigger for `^main$`, selecting **Cloud Build configuration file**
    at `/cloudbuild.yaml` and the dedicated **build** service account.
+   Under **Ignored files filter (glob)**, add `docs/**`, `**/*.md` and `LICENSE` so
+   documentation-only pushes do not build or deploy. A push that also changes other
+   files still builds. As a one-off, put `[skip ci]` in the commit message.
 4. Set the substitutions listed below for your project and mailbox. The runtime
    identity is set by the YAML; selecting a trigger account does not replace it.
 5. Run the trigger once and verify health and MCP authentication before normal use.
