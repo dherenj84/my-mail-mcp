@@ -1,0 +1,80 @@
+# Configure the trigger with a dedicated build service account; see docs/deployment.md.
+# Substitutions contain configuration and secret references, never secret values.
+steps:
+  - id: checks
+    name: ghcr.io/astral-sh/uv:0.13.4-python3.12-bookworm-slim
+    entrypoint: bash
+    env:
+      - UV_PROJECT_ENVIRONMENT=/tmp/my-mail-mcp-checks
+    args:
+      - -ceu
+      - |
+        uv sync --locked
+        uv run --locked ruff check src tests
+        uv run --locked ruff format --check src tests
+        uv run --locked pytest -q
+
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    env:
+      - DOCKER_BUILDKIT=1
+    args:
+      - build
+      - --tag
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+      - .
+
+  # Cloud Run needs the image before the final `images` upload takes place.
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --project=$PROJECT_ID
+      - --region=${_REGION}
+      - --platform=managed
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+      - --service-account=${_RUNTIME_SERVICE_ACCOUNT}
+      - --port=8080
+      - --cpu=1
+      - --memory=512Mi
+      - --min=0
+      - --max=${_MAX_INSTANCES}
+      - --concurrency=10
+      - --timeout=300
+      - --ingress=all
+      # Cloud Run admits requests; FastMCP checks the application's bearer token.
+      - --no-invoker-iam-check
+      - --update-env-vars=MAIL_IMAP_HOST=${_MAIL_IMAP_HOST},MAIL_IMAP_PORT=${_MAIL_IMAP_PORT}
+      - --update-secrets=MAIL_USERNAME=${_MAIL_USERNAME_SECRET},MAIL_PASSWORD=${_MAIL_PASSWORD_SECRET},MCP_AUTH_TOKEN=${_MCP_AUTH_TOKEN_SECRET}
+      - --quiet
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+
+substitutions:
+  _REGION: us-central1
+  _REPOSITORY: my-mail-mcp
+  _SERVICE: my-mail-mcp
+  _RUNTIME_SERVICE_ACCOUNT: my-mail-mcp-runtime@${PROJECT_ID}.iam.gserviceaccount.com
+  _MAX_INSTANCES: '3'
+  _MAIL_IMAP_HOST: imap.mail.yahoo.com
+  _MAIL_IMAP_PORT: '993'
+  # Resolve the latest secret versions when Cloud Run instances start.
+  _MAIL_USERNAME_SECRET: my-mail-mcp-username:latest
+  _MAIL_PASSWORD_SECRET: my-mail-mcp-password:latest
+  _MCP_AUTH_TOKEN_SECRET: my-mail-mcp-token:latest
+
+options:
+  dynamicSubstitutions: true
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s

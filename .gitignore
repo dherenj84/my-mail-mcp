@@ -1,0 +1,19 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+dist/
+*.egg-info/
+
+# Local MCP client configuration contains authentication credentials
+.mcp.json
+
+.DS_Store
+.vscode/
+
+# Temporary Google GitHub Actions authentication credentials
+gha-creds-*.json

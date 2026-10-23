@@ -1,0 +1,18 @@
+.gcloudignore
+.git
+.git/**
+.gitignore
+#!include:.gitignore
+# Explicitly exclude credentials even when source is submitted before git add.
+.env
+.env.*
+.mcp.json
+.vscode/**
+.venv/**
+dist/**
+**/__pycache__/**
+.pytest_cache/**
+.ruff_cache/**
+
+# Temporary Google GitHub Actions authentication credentials
+gha-creds-*.json

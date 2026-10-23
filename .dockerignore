@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+.venv
+__pycache__
+.pytest_cache
+tests
+.mcp.json
+.vscode
+.ruff_cache
+*.egg-info
+dist
+
+# Temporary Google GitHub Actions authentication credentials
+gha-creds-*.json
