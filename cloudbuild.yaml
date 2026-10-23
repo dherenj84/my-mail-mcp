@@ -48,6 +48,8 @@ steps:
       - --cpu=1
       - --memory=512Mi
       - --min=0
+      # Extra CPU only while a cold instance starts.
+      - --cpu-boost
       - --max=${_MAX_INSTANCES}
       - --concurrency=10
       - --timeout=300

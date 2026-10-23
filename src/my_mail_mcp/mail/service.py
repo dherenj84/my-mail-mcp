@@ -1,4 +1,6 @@
+import logging
 import ssl
+import time
 from contextlib import contextmanager
 from email import policy
 from email.header import decode_header, make_header
@@ -8,6 +10,8 @@ import certifi
 from imapclient import IMAPClient
 
 from my_mail_mcp.config import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class MailService:
@@ -19,6 +23,7 @@ class MailService:
         # Each request owns its connection; instances share no mailbox state.
         context = ssl.create_default_context()
         context.load_verify_locations(cafile=certifi.where())
+        started = time.perf_counter()
         with IMAPClient(
             self.settings.mail_imap_host,
             port=self.settings.mail_imap_port,
@@ -30,7 +35,16 @@ class MailService:
                 self.settings.mail_username,
                 self.settings.mail_password.get_secret_value(),
             )
-            yield client
+            connected = time.perf_counter()
+            try:
+                yield client
+            finally:
+                done = time.perf_counter()
+                logger.info(
+                    "imap connect_login=%.2fs work=%.2fs",
+                    connected - started,
+                    done - connected,
+                )
 
     def list_folders(self) -> list[dict]:
         with self.connection() as client:

@@ -1,3 +1,5 @@
+import logging
+
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.server.auth import (
@@ -83,6 +85,7 @@ def create_server(settings: Settings) -> FastMCP:
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
     settings = Settings()
     create_server(settings).run(
         transport="http", host="0.0.0.0", port=settings.port, stateless_http=True
