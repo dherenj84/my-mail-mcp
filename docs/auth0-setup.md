@@ -1,120 +1,159 @@
-# Auth0 OAuth setup for ChatGPT
+# OAuth setup with Auth0 (for ChatGPT and other OAuth clients)
 
-Records the Auth0 tenant configuration prepared for connecting ChatGPT to this
-server over OAuth. It follows step 2 of the
-[openai-mcpkit authenticated scaffold](https://github.com/openai/openai-mcpkit/blob/main/python-authenticated-mcp-server-scaffold/README.md#2-configure-auth0-authentication).
+This guide connects an OAuth-capable MCP client (ChatGPT is the tested one) to your
+deployed server using Auth0 as the identity provider (IdP). It is a
+step-by-step recipe you can repeat for your own tenant. Clients that cannot do
+OAuth (VS Code, scripts) keep using the static `MCP_AUTH_TOKEN`.
 
-> **Status:** the Auth0 tenant is configured and the server validates Auth0 JWTs
-> (when `AUTH_ISSUER_URL` and `PUBLIC_BASE_URL` are set) alongside the static
-> `MCP_AUTH_TOKEN`. Verified end to end: ChatGPT connected through Auth0 and
-> reached the server. See [Remaining work](#remaining-work).
+## How it works
 
-## Values
+The server is only a *resource server*: it never issues tokens. Auth0 does.
 
-| Item | Value |
+1. The client calls `/mcp`, gets `401`, and reads
+   `/.well-known/oauth-protected-resource/mcp`, which names your Auth0 issuer.
+2. The client talks to Auth0, you log in there and approve access.
+3. Auth0 issues an RS256 JWT access token whose audience is `<PUBLIC_BASE_URL>/mcp`.
+4. The client sends `Authorization: Bearer <jwt>`; the server verifies signature
+   (via `<issuer>/.well-known/jwks.json`), exact issuer, audience and expiry.
+
+Your Auth0 password is never seen by the client or this server and is unrelated to
+your mailbox app password.
+
+> **Security model:** the server accepts *any* valid token for its audience, so
+> whoever can sign in to the Auth0 API's connection controls the mailbox
+> (including sending and permanent deletion). Keep the tenant single-user (step 7).
+
+## Server settings
+
+| Variable | Value |
 | --- | --- |
-| Tenant | `dev-fh3rg5w3wwzzwzgs` (US region, Development) |
-| Issuer | `https://dev-fh3rg5w3wwzzwzgs.us.auth0.com/` (trailing slash matters) |
-| JWKS | `https://dev-fh3rg5w3wwzzwzgs.us.auth0.com/.well-known/jwks.json` |
-| API name | `my-mail-mcp` |
-| API identifier (audience) | `https://my-mail-mcp-1080363999711.us-central1.run.app/mcp` |
-| Token profile / algorithm | Auth0 / RS256 |
-| MCP client | ChatGPT, CIMD `https://chatgpt.com/oauth/client.json` |
+| `PUBLIC_BASE_URL` | Public HTTPS URL of the deployment, no trailing slash, e.g. `https://my-mail-mcp-123456789.us-central1.run.app` |
+| `AUTH_ISSUER_URL` | Auth0 issuer, e.g. `https://YOUR_TENANT.us.auth0.com/` — **keep the trailing slash** |
 
-The API identifier cannot be changed after creation. It is the MCP endpoint without
-a trailing slash; the server also serves `/mcp/`, so make the audience check match
-what the client sends.
+Both must be set together (or neither, which disables OAuth) and must use `https`.
+Neither is secret. The Auth0 **API identifier (audience)** must equal
+`<PUBLIC_BASE_URL>/mcp` exactly.
 
-## What was configured
+## Step 0: know your service URL first
 
-1. **API** `my-mail-mcp` created with the identifier above (Auth0 profile, RS256).
-   Access policy is *Per-app authorization* for user-delegated and client access.
-2. **Default audience** (Tenant Settings → General) set to the API identifier, so
-   Auth0 issues an unencrypted RS256 JWT for it.
-3. **CIMD registration** enabled (Settings → Advanced → *Client ID Metadata Document
-   (CIMD) Registration*). *Dynamic CIMD Registration* is left off.
-4. **ChatGPT client** imported (Applications → Create Application → Import from URL)
-   from the CIMD URL above. It is a third-party app using `private_key_jwt` with
-   ChatGPT's published JWKS, and the stable callback
-   `https://chatgpt.com/connector_platform_oauth_redirect`. Auth0 warns it ignores
-   `client_uri` and `token_endpoint_auth_methods_supported`; this is harmless.
-5. **Grant**: ChatGPT has *User-Delegated Access* to the API (APIs → `my-mail-mcp` →
-   Application Access). Client (machine-to-machine) access is not granted.
+The audience depends on the public URL, and the API identifier **cannot be changed**
+after creation, so decide the URL before step 2:
 
-No scopes are defined on the API, so the grant carries none.
+- Cloud Run URL: deploy once with the static token only (override
+  `_AUTH_ISSUER_URL` and `_PUBLIC_BASE_URL` to empty strings, see
+  [deployment](deployment.md)), then read the URL with
+  `gcloud run services describe my-mail-mcp --region REGION --format='value(status.url)'`.
+  Note that the deterministic form `https://SERVICE-PROJECTNUMBER.REGION.run.app` is also valid.
+- Or use a custom domain you control.
 
-6. **Login connection** (needed or the login fails with `invalid_request: no
-   connections enabled for the client`): third-party apps can only use
-   domain-level connections. On `Username-Password-Authentication`, *Promote
-   Connection to Domain Level* is on (irreversible) and the connection is enabled for
-   the ChatGPT app.
-7. **Single owner:** *Disable Sign Ups* is on for that connection, Google is not
-   enabled, and the only user is the owner's account. The server accepts any valid
-   token for its audience, so whoever can log in owns the mailbox. Do not enable
-   Google or open signups without also checking the user's identity in the server.
-   A new user can only be added from the Auth0 dashboard.
+## Step 1: create an Auth0 tenant
 
-## How the connection works
+Sign up at [auth0.com](https://auth0.com), create a tenant and note its domain
+(`YOUR_TENANT.REGION.auth0.com`). Your issuer is `https://<domain>/`.
 
-ChatGPT never creates tokens; Auth0 issues them.
+## Step 2: create the API
 
-1. ChatGPT calls `/mcp`, gets `401`, and reads
-   `/.well-known/oauth-protected-resource/mcp`, which names the Auth0 issuer.
-2. ChatGPT reads Auth0's authorization-server metadata and uses
-   `client_id=https://chatgpt.com/oauth/client.json` (CIMD), which Auth0 matches to the
-   imported ChatGPT application.
-3. The owner logs in on Auth0's page (the only place the username and password are
-   used) and approves the consent screen. Auth0 redirects back with a code.
-4. ChatGPT exchanges the code, authenticating with `private_key_jwt` against
-   `https://chatgpt.com/oauth/jwks.json`, and receives an RS256 access token whose
-   audience is the API identifier.
-5. ChatGPT sends `Authorization: Bearer <token>`; the server verifies signature,
-   issuer, audience and expiry.
+Dashboard → **Applications → APIs → Create API**:
 
-The username and password are never given to ChatGPT or the MCP server, and are
-unrelated to the mailbox password in Secret Manager.
+- Name: `my-mail-mcp`
+- Identifier: `<PUBLIC_BASE_URL>/mcp` (for example
+  `https://my-mail-mcp-123456789.us-central1.run.app/mcp`; no trailing slash)
+- Token profile: **Auth0**, signing algorithm: **RS256**
 
-Sources: MCP authorization spec (OAuth 2.1, RFC 9728, RFC 8707, CIMD), OpenAI's
-authentication guide for MCP servers, and the openai-mcpkit README.
+In the API's settings set the access policy to *Per-app authorization* for
+user-delegated access, and do not grant client (machine-to-machine) access.
+
+## Step 3: set the default audience
+
+**Settings → General → API Authorization Settings → Default Audience**: enter the same
+identifier. Clients such as ChatGPT may not send an `audience` parameter; without a
+default, Auth0 returns an opaque (encrypted) token that the server cannot verify.
+
+## Step 4: enable CIMD client registration
+
+**Settings → Advanced → Client ID Metadata Document (CIMD) Registration**: turn it
+on. Leave *Dynamic CIMD Registration* off.
+
+## Step 5: register the ChatGPT application
+
+**Applications → Create Application → Import from URL**, using
+`https://chatgpt.com/oauth/client.json`. It is created as a third-party app with
+`private_key_jwt` authentication and the callback
+`https://chatgpt.com/connector_platform_oauth_redirect`. Auth0 warns that it ignores
+`client_uri` and `token_endpoint_auth_methods_supported`; this is harmless.
+
+If login later fails with a redirect mismatch, ChatGPT's connector page shows the
+exact callback (for example `https://chatgpt.com/connector/oauth/{callback_id}`); add
+it to the application's *Allowed Callback URLs*.
+
+## Step 6: authorize the application for the API
+
+**APIs → my-mail-mcp → Application Access**: give the ChatGPT application
+**User Access** (user-delegated). No scopes are required; none are defined.
+
+## Step 7: set up login and lock it to yourself
+
+Third-party apps can only use domain-level connections, otherwise login fails with
+`invalid_request: no connections enabled for the client`.
+
+1. **Authentication → Database → Username-Password-Authentication**:
+   turn on **Promote Connection to Domain Level** (irreversible) and enable the
+   connection for the ChatGPT application.
+2. Turn on **Disable Sign Ups** for that connection.
+3. Do **not** enable social connections (Google, etc.) or open sign-ups.
+4. Create your own user under **User Management → Users** (the only user).
+5. Strongly recommended: enable MFA (Security → Multi-factor Auth).
+
+Connection and tenant changes can take about 30 seconds to apply.
+
+## Step 8: configure and deploy the server
+
+Set both variables on the server. For Cloud Run via Cloud Build, pass them as
+substitutions (the defaults in `cloudbuild.yaml` belong to the repository owner and
+**must** be overridden):
+
+```sh
+gcloud builds submit . --region="$MAIL_GCP_REGION" --config=cloudbuild.yaml \
+  --service-account="projects/$MAIL_GCP_PROJECT/serviceAccounts/my-mail-mcp-build@$MAIL_GCP_PROJECT.iam.gserviceaccount.com" \
+  --substitutions="_REGION=$MAIL_GCP_REGION,_AUTH_ISSUER_URL=https://YOUR_TENANT.us.auth0.com/,_PUBLIC_BASE_URL=https://YOUR_SERVICE_URL"
+```
+
+For a trigger, set the same substitutions in the trigger. Locally or in Docker, put
+`AUTH_ISSUER_URL` and `PUBLIC_BASE_URL` in `.env`.
+
+## Step 9: connect and verify
+
+1. Check the metadata (it must name your issuer):
+   `curl https://YOUR_SERVICE_URL/.well-known/oauth-protected-resource/mcp`
+2. Confirm `curl -i https://YOUR_SERVICE_URL/mcp/` returns `401`.
+3. In ChatGPT, add a custom MCP connector with URL `https://YOUR_SERVICE_URL/mcp`
+   (use OAuth authentication), sign in to Auth0 and approve.
+4. Ask ChatGPT to list your mail folders.
 
 ## Troubleshooting
 
 | Symptom | Cause / fix |
 | --- | --- |
-| Auth0 error `invalid_request: no connections enabled for the client` | Third-party apps need a domain-level connection. Promote the connection and enable it for the ChatGPT app (item 6 above). |
-| `401` from `/mcp` with a valid-looking token | Audience or issuer mismatch. The audience must equal `<PUBLIC_BASE_URL>/mcp` exactly and the issuer must keep its trailing slash. |
-| Redirect mismatch at login | ChatGPT's connector page may show `https://chatgpt.com/connector/oauth/{callback_id}`; add it to the ChatGPT application's callbacks. |
-| Startup fails mentioning `AUTH_ISSUER_URL` | Both OAuth variables must be set together and use `https`. |
-| Changes in Auth0 not visible yet | Connection and tenant changes can take about 30 seconds. |
+| `invalid_request: no connections enabled for the client` | Promote the connection to domain level and enable it for the ChatGPT app (step 7). |
+| `401` with a valid-looking token | Audience or issuer mismatch: audience must equal `<PUBLIC_BASE_URL>/mcp` exactly; issuer must keep its trailing slash. Decode the token at jwt.io to compare `iss` and `aud`. |
+| Token is opaque / not a JWT (`JWE`) | Default Audience not set, or API token profile/algorithm is wrong (steps 2–3). |
+| Redirect mismatch at login | Add the callback shown by ChatGPT (step 5). |
+| Startup error mentioning `AUTH_ISSUER_URL` | Both variables must be set together and use `https`. |
+| `access_denied` / user cannot consent | The application is not authorized for the API (step 6). |
+| Works in ChatGPT but you changed the Cloud Run URL | The audience is tied to the URL; create a new API with the new identifier. |
 
-## Server behavior and environment variables
+## Hardening ideas
 
-Neither value is a secret. Both must be set to enable OAuth; setting only one fails
-startup.
+- Optionally enforce your `sub` in the server as a second layer.
+- Define API scopes (read vs. write) and enforce them per tool. Today any valid token
+  can send mail and permanently delete; a separate scope for `send_message`,
+  `reply_message`, `forward_message` and `permanently_delete_messages` is most valuable.
+- If you only use OAuth clients, remove the static `MCP_AUTH_TOKEN` fallback.
 
-```text
-AUTH_ISSUER_URL=https://dev-fh3rg5w3wwzzwzgs.us.auth0.com/
-PUBLIC_BASE_URL=https://my-mail-mcp-1080363999711.us-central1.run.app
-```
+## Using another IdP
 
-The server (`build_auth` in `src/my_mail_mcp/server.py`) accepts either:
-
-- an Auth0 RS256 JWT, verified against `<issuer>/.well-known/jwks.json` with exact
-  issuer match and audience `<PUBLIC_BASE_URL>/mcp`; or
-- the static `MCP_AUTH_TOKEN` (kept for VS Code and other clients).
-
-It publishes RFC 9728 metadata at `/.well-known/oauth-protected-resource/mcp`
-pointing clients at the Auth0 issuer. `cloudbuild.yaml` passes both variables to
-Cloud Run through the `_AUTH_ISSUER_URL` and `_PUBLIC_BASE_URL` substitutions.
-
-## Remaining work
-
-- Consider enabling MFA for the owner user.
-- Optionally enforce the owner's `sub` in the server as a second layer.
-- Optionally define scopes (for example read vs. write mail tools) on the API, add
-  them to the ChatGPT grant and enforce them per tool. Today any valid token for the
-  audience can use every tool, including sending mail and permanent deletion. A
-  separate scope for `send_message`, `reply_message`, `forward_message` and
-  `permanently_delete_messages` is the most valuable one to add.
-- If you only use ChatGPT, consider removing the static `MCP_AUTH_TOKEN` fallback so
-  Auth0 is the only way in.
+The server only needs an OIDC-style issuer that publishes JWKS at
+`<issuer>/.well-known/jwks.json`, signs access tokens with RS256, and puts
+`<PUBLIC_BASE_URL>/mcp` in `aud`. Any such provider works with the same two
+variables; Auth0 steps 2–7 map to "create an API/resource with that audience,
+register the client, restrict who can sign in". The JWKS path is currently fixed.

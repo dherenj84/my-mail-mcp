@@ -13,9 +13,9 @@ Message references include folder, UID and UIDVALIDITY to reject stale identifie
 Attachment metadata is included; attachment downloads are not implemented yet.
 Search pagination bounds the returned data, but currently searches all matching UIDs.
 
-Planned: drafts, attachment transfer, OAuth client authentication,
-and GitHub Actions deployment configuration. Cloud Build deployment is configured
-but not yet verified on GCP. Sending is implemented but untested against live Yahoo SMTP. Yahoo reading has been manually verified locally through
+Planned: drafts, attachment transfer and GitHub Actions deployment configuration.
+OAuth (Auth0 JWT validation) is implemented; see [Auth0 setup](docs/auth0-setup.md).
+Cloud Build deployment is configured. Sending is implemented but untested against live Yahoo SMTP. Yahoo reading has been manually verified locally through
 VS Code Copilot. Mutation tools have automated coverage but have not been tested
 against a live Yahoo mailbox; other providers and Cloud Run remain unverified.
 
@@ -119,7 +119,8 @@ placeholders before deploying.
 Clients connect to `/mcp/` with `Authorization: Bearer <MCP_AUTH_TOKEN>`.
 `GET /health` checks the process, without connecting to the mailbox.
 Bearer authentication is an initial integration option; browser-based connector
-OAuth onboarding is not implemented and ChatGPT compatibility is not yet verified.
+OAuth is available for browser-based connectors such as ChatGPT; see
+[Auth0 setup](docs/auth0-setup.md).
 
 ## VS Code Copilot setup
 
@@ -188,7 +189,8 @@ authentication are separate layers; client access must be configured accordingly
 [`cloudbuild.yaml`](cloudbuild.yaml) runs checks, builds and pushes to Artifact
 Registry, then deploys Cloud Run with Secret Manager references. Follow the
 [deployment guide](docs/deployment.md) for one-time setup and GitHub triggers.
-No GCP resources have been provisioned or deployed yet.
+Start with the [deployment guide](docs/deployment.md), then enable OAuth with
+[Auth0 setup](docs/auth0-setup.md) if you want ChatGPT access.
 
 OAuth for ChatGPT via Auth0 is documented in [Auth0 setup](docs/auth0-setup.md). The
 static bearer token keeps working alongside it.

@@ -92,6 +92,12 @@ gcloud builds submit . \
   --substitutions="_REGION=$MAIL_GCP_REGION"
 ```
 
+The command above deploys with the repository owner's OAuth defaults. Unless
+you are that owner, also pass `_AUTH_ISSUER_URL` and `_PUBLIC_BASE_URL`: use
+`_AUTH_ISSUER_URL=,_PUBLIC_BASE_URL=` (empty) for a first, static-token-only deploy,
+then rerun with your real values after [setting up Auth0](auth0-setup.md). If you
+send mail through a non-Yahoo provider, also set `_MAIL_SMTP_HOST` and `_MAIL_SMTP_PORT`.
+
 `.gcloudignore` excludes local credentials, editor configuration, virtual
 environments and build artifacts from uploaded source. `.dockerignore` separately
 controls what enters the Docker build context. Review uploads before submitting:
@@ -134,8 +140,10 @@ its generated default pipeline may otherwise bypass these checks and settings.
 | `_MAX_INSTANCES` | `3` | Cloud Run service maximum instance setting |
 | `_MAIL_IMAP_HOST` | `imap.mail.yahoo.com` | Provider's IMAP host |
 | `_MAIL_IMAP_PORT` | `993` | Provider's implicit TLS port |
-| `_AUTH_ISSUER_URL` | Auth0 tenant URL | OAuth issuer; see [Auth0 setup](auth0-setup.md) |
-| `_PUBLIC_BASE_URL` | Cloud Run service URL | Used to build the `/mcp` token audience |
+| `_MAIL_SMTP_HOST` | `smtp.mail.yahoo.com` | Provider's SMTP host (sending) |
+| `_MAIL_SMTP_PORT` | `465` | Provider's SMTP port (sending) |
+| `_AUTH_ISSUER_URL` | Repo owner's Auth0 tenant | **Override.** Your OAuth issuer, or empty to disable OAuth; see [Auth0 setup](auth0-setup.md) |
+| `_PUBLIC_BASE_URL` | Repo owner's Cloud Run URL | **Override.** Your service's public URL, or empty to disable OAuth; the token audience is `<url>/mcp` |
 | `_MAIL_USERNAME_SECRET` | `my-mail-mcp-username:latest` | Secret name and version |
 | `_MAIL_PASSWORD_SECRET` | `my-mail-mcp-password:latest` | Secret name and version |
 | `_MCP_AUTH_TOKEN_SECRET` | `my-mail-mcp-token:latest` | Secret name and version |
@@ -160,8 +168,8 @@ The configuration explicitly sets ingress to `all` and disables Cloud Run's
 Invoker IAM check using Google's [recommended public-access option](https://docs.cloud.google.com/run/docs/authenticating/public).
 This makes the HTTPS endpoint reachable by external MCP clients. **The MCP
 endpoint still requires FastMCP's `Authorization: Bearer <MCP_AUTH_TOKEN>`.**
-Only `/health` is intentionally unauthenticated. This does not implement OAuth
-onboarding for ChatGPT connectors; that remains a separate milestone.
+Only `/health` is intentionally unauthenticated. OAuth for ChatGPT-style
+connectors is optional and set up in [Auth0 setup](auth0-setup.md).
 
 Organization policy may forbid disabling the Invoker IAM check. In that case,
 keep Cloud Run IAM enabled and use a client/gateway that supplies a Google ID
