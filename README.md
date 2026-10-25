@@ -1,5 +1,7 @@
 # My Mail MCP
 
+![My Mail MCP — email tools for AI agents](assets/social-preview.jpeg)
+
 A self-hosted, provider-configurable email MCP server. Yahoo is the initial target.
 Built with FastMCP 4.1.3, pinned in `pyproject.toml` and `uv.lock`.
 One stateless Python container; no database or application action quota.
