@@ -54,12 +54,8 @@ Create these Secret Manager secrets and add a value to each:
 
 | Secret | Exact value |
 | --- | --- |
-| `my-mail-mcp-username` | Full mailbox login, for example your Yahoo address |
-| `my-mail-mcp-password` | Yahoo app password |
+| `my-mail-mcp-accounts` | The `MAIL_ACCOUNTS` JSON list of mailboxes, even for a single mailbox; see [Mailbox accounts](#mailbox-accounts) |
 | `my-mail-mcp-token` | Random MCP bearer token, at least 32 characters |
-
-For several mailboxes, create `my-mail-mcp-accounts` instead of the username and
-password secrets; see [Multiple mailboxes](#multiple-mailboxes).
 
 Use the Secret Manager console, or `gcloud secrets create` followed by
 `gcloud secrets versions add --data-file=/secure/path/to/value-file`. Value files
@@ -98,8 +94,8 @@ gcloud builds submit . \
 The command above deploys with the repository owner's OAuth defaults. Unless
 you are that owner, also pass `_AUTH_ISSUER_URL` and `_PUBLIC_BASE_URL`: use
 `_AUTH_ISSUER_URL=,_PUBLIC_BASE_URL=` (empty) for a first, static-token-only deploy,
-then rerun with your real values after [setting up Auth0](auth0-setup.md). If you
-send mail through a non-Yahoo provider, also set `_MAIL_SMTP_HOST` and `_MAIL_SMTP_PORT`.
+then rerun with your real values after [setting up Auth0](auth0-setup.md). Mailbox
+hosts and ports are set per account in the `my-mail-mcp-accounts` secret.
 
 `.gcloudignore` excludes local credentials, editor configuration, virtual
 environments and build artifacts from uploaded source. `.dockerignore` separately
@@ -132,19 +128,19 @@ the Cloud Build trigger and store runtime credentials in GCP Secret Manager.
 A Cloud Run repository integration must be configured to use this build file;
 its generated default pipeline may otherwise bypass these checks and settings.
 
-## Multiple mailboxes
+## Mailbox accounts
 
-Store the `MAIL_ACCOUNTS` JSON (it contains app passwords) in a Secret Manager
-secret named `my-mail-mcp-accounts`, grant the runtime account Secret Accessor on
-it, and set `_MAIL_SECRETS` on the trigger to
-`MAIL_ACCOUNTS=my-mail-mcp-accounts:latest`. The JSON format is in the
-[README](../README.md#multiple-mailboxes). `MAIL_ACCOUNTS` takes precedence, so
-existing `MAIL_USERNAME` / `MAIL_PASSWORD` secrets on the service are ignored and
-can be removed later with `gcloud run services update --remove-secrets`. Commas in
-`_MAIL_SECRETS` need gcloud's alternate-delimiter syntax (`--substitutions=^;^_MAIL_SECRETS=...`) when
-set from the CLI; the console needs nothing special. Per-account hosts, ports and
-folder overrides live in the JSON, so the `_MAIL_*_HOST/PORT` substitutions apply
-only to the single-mailbox setup.
+Mailboxes are configured only through the `my-mail-mcp-accounts` secret, a
+`MAIL_ACCOUNTS` JSON list that holds app passwords. A single mailbox is a list with
+one entry. The format is in the [README](../README.md#multiple-mailboxes); per-account
+hosts, ports and folder overrides live in the JSON. Grant the runtime account Secret
+Accessor on the secret and add a new secret version to change accounts (instances
+read it at startup, so deploy or restart to apply it).
+
+Migrating an existing deployment: create the secret with your current mailbox as the
+only entry before deploying. The deployed service may still have old `MAIL_USERNAME` /
+`MAIL_PASSWORD` secrets mounted; they are ignored while `MAIL_ACCOUNTS` is set, and can be
+removed with `gcloud run services update my-mail-mcp --remove-secrets=MAIL_USERNAME,MAIL_PASSWORD`.
 
 ## Deploying a pull-request branch to production
 
@@ -169,26 +165,21 @@ Only run this for branches you trust; the build holds production deploy rights.
 | `_SERVICE` | `my-mail-mcp` | Cloud Run service name |
 | `_RUNTIME_SERVICE_ACCOUNT` | `my-mail-mcp-runtime@PROJECT_ID.iam.gserviceaccount.com` | Runtime identity; PROJECT_ID resolves automatically |
 | `_MAX_INSTANCES` | `3` | Cloud Run service maximum instance setting |
-| `_MAIL_IMAP_HOST` | `imap.mail.yahoo.com` | Provider's IMAP host |
-| `_MAIL_IMAP_PORT` | `993` | Provider's implicit TLS port |
-| `_MAIL_SMTP_HOST` | `smtp.mail.yahoo.com` | Provider's SMTP host (sending) |
-| `_MAIL_SMTP_PORT` | `465` | Provider's SMTP port (sending) |
 | `_AUTH_ISSUER_URL` | Repo owner's Auth0 tenant | **Override.** Your OAuth issuer, or empty to disable OAuth; see [Auth0 setup](auth0-setup.md) |
 | `_PUBLIC_BASE_URL` | Repo owner's Cloud Run URL | **Override.** Your service's public URL, or empty to disable OAuth; the token audience is `<url>/mcp` |
-| `_MAIL_SECRETS` | `MAIL_USERNAME=my-mail-mcp-username:latest,MAIL_PASSWORD=my-mail-mcp-password:latest` | Mailbox secret references. Replaces the former `_MAIL_USERNAME_SECRET` and `_MAIL_PASSWORD_SECRET`; see [Multiple mailboxes](#multiple-mailboxes) |
+| `_MAIL_ACCOUNTS_SECRET` | `my-mail-mcp-accounts:latest` | Secret name and version holding the `MAIL_ACCOUNTS` JSON |
 | `_MCP_AUTH_TOKEN_SECRET` | `my-mail-mcp-token:latest` | Secret name and version |
 
 Cloud Run supplies `PORT`; do not configure it as a regular environment variable.
 The service scales down to zero with a maximum setting of three by default,
 uses one CPU / 512 MiB per instance, and accepts up to ten simultaneous requests
 per instance. Adjust these explicit deployment settings for your workload.
-Optional `MAIL_ARCHIVE_FOLDER`, `MAIL_TRASH_FOLDER` and `MAIL_SENT_FOLDER` overrides can be configured
-on Cloud Run and are preserved across builds. Other compatible providers can
-supply different host, port, and credential references without source changes.
+Per-account folder overrides, hosts and ports are set in the accounts JSON, so other
+compatible providers need no source changes.
 
 The `send_message`, `reply_message` and `forward_message` tools use the same
-mailbox credentials over SMTP (`MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`,
-`MAIL_SMTP_STARTTLS`; defaults suit Yahoo). Cloud Run must be able to reach the
+mailbox credentials over SMTP (`smtp_host`, `smtp_port`, `smtp_starttls` per account;
+defaults suit Yahoo). Cloud Run must be able to reach the
 SMTP port outbound, which it allows by default. Sending is untested against live
 Yahoo, so send a first test message to yourself.
 

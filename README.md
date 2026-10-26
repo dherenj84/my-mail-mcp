@@ -217,8 +217,8 @@ docker build -t my-mail-mcp:local .
 docker run --rm --name my-mail-mcp-local --env-file .env -p 127.0.0.1:8080:8080 my-mail-mcp:local
 ```
 
-Cloud Run supplies `PORT`. Configure mailbox settings as environment variables and
-`MAIL_PASSWORD` / `MCP_AUTH_TOKEN` as Secret Manager references. The service account
+Cloud Run supplies `PORT`. Mount `MAIL_ACCOUNTS` and `MCP_AUTH_TOKEN` as Secret Manager
+references (a single mailbox is a one-entry `MAIL_ACCOUNTS` list). The service account
 needs access only to those secrets. Cloud Run IAM and the application's bearer
 authentication are separate layers; client access must be configured accordingly.
 [`cloudbuild.yaml`](cloudbuild.yaml) runs checks, builds and pushes to Artifact
