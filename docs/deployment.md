@@ -137,6 +137,31 @@ hosts, ports and folder overrides live in the JSON. Grant the runtime account Se
 Accessor on the secret and add a new secret version to change accounts (instances
 read it at startup, so deploy or restart to apply it).
 
+Create the secret from a local file outside the repository (single mailbox shown;
+add more entries for more mailboxes, see the README for examples):
+
+```sh
+cat > /secure/path/accounts.json <<'JSON'
+[{"id":"yahoo","username":"you@yahoo.com","password":"yahoo-app-password"}]
+JSON
+gcloud secrets create my-mail-mcp-accounts --data-file=/secure/path/accounts.json --project="$MAIL_GCP_PROJECT"
+gcloud secrets add-iam-policy-binding my-mail-mcp-accounts --project="$MAIL_GCP_PROJECT" \
+  --member="serviceAccount:my-mail-mcp-runtime@$MAIL_GCP_PROJECT.iam.gserviceaccount.com" \
+  --role=roles/secretmanager.secretAccessor
+```
+
+To add or change a mailbox later, edit the file and add a new version, then redeploy
+(or run the trigger) so new instances pick it up. Check the JSON first, since an invalid
+list stops the new revision from starting:
+
+```sh
+python -m json.tool /secure/path/accounts.json > /dev/null && \
+  gcloud secrets versions add my-mail-mcp-accounts --data-file=/secure/path/accounts.json --project="$MAIL_GCP_PROJECT"
+```
+
+Delete the local file afterwards. Non-Yahoo mailboxes set their hosts in the JSON (for
+example `"imap_host":"imap.gmail.com","smtp_host":"smtp.gmail.com"`).
+
 Migrating an existing deployment: create the secret with your current mailbox as the
 only entry before deploying. The deployed service may still have old `MAIL_USERNAME` /
 `MAIL_PASSWORD` secrets mounted; they are ignored while `MAIL_ACCOUNTS` is set, and can be

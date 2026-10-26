@@ -186,7 +186,26 @@ when exposing it remotely. The bearer credential grants access to this mailbox.
 
 ## Multiple mailboxes
 
-Set `MAIL_ACCOUNTS` to a JSON list, on one line in `.env` inside single quotes:
+Mailboxes are configured with `MAIL_ACCOUNTS`, a JSON list with one entry per mailbox.
+In `.env`, put it inside single quotes (multi-line is fine). On Cloud Run it is the
+contents of a Secret Manager secret (see the [deployment guide](docs/deployment.md#mailbox-accounts)).
+
+**Single Yahoo mailbox** (hosts default to Yahoo, so only three fields are needed):
+
+```sh
+MAIL_ACCOUNTS='[{"id":"yahoo","username":"you@yahoo.com","password":"yahoo-app-password"}]'
+```
+
+**Two Yahoo mailboxes:**
+
+```sh
+MAIL_ACCOUNTS='[
+ {"id":"personal","username":"you@yahoo.com","password":"app-password-1"},
+ {"id":"family","username":"family@yahoo.com","password":"app-password-2"}
+]'
+```
+
+**Yahoo and Gmail** (non-Yahoo providers override the hosts):
 
 ```sh
 MAIL_ACCOUNTS='[
@@ -196,6 +215,8 @@ MAIL_ACCOUNTS='[
 ]'
 ```
 
+To add a mailbox, append an entry with a unique `id` and restart the server.
+
 Required per account: `id` (letters, digits, `_`, `.`, `-`), `username`, `password`.
 Optional: `imap_host`, `imap_port`, `smtp_host`, `smtp_port`, `smtp_starttls`,
 `archive_folder`, `trash_folder`, `sent_folder` (defaults match Yahoo) and
@@ -203,6 +224,13 @@ Optional: `imap_host`, `imap_port`, `smtp_host`, `smtp_port`, `smtp_starttls`,
 
 - Call `list_accounts`, then pass `account` to every other tool. Without it the call is
   rejected, so mail is never touched in the wrong mailbox. UIDs are per account.
+  With one account, `account` can be omitted. Example, today's unread mail in Gmail:
+  `search_messages` with `{"account": "gmail", "since": "2026-10-26", "unread_only": true}`.
+- With several accounts, use the folder names from `list_folders` for that account; they differ
+  by provider (`Inbox` on Yahoo, `INBOX` and `[Gmail]/Trash` on Gmail).
+- A bad entry (duplicate or invalid `id`, placeholder password) stops the server at startup.
+- `MAIL_ACCOUNTS` takes precedence over the older `MAIL_USERNAME` / `MAIL_PASSWORD`
+  settings, which are ignored (with a warning) when both exist.
 - At most 3 simultaneous IMAP connections per account per server instance; extra requests wait
   up to a minute. The cap is not shared across instances, so Cloud Run scale-out (up to
   `_MAX_INSTANCES`, default 3) can reach that many times 3 connections. Lower `_MAX_INSTANCES`
