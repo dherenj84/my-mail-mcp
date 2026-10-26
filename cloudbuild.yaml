@@ -56,8 +56,8 @@ steps:
       - --ingress=all
       # Cloud Run admits requests; FastMCP checks the application's bearer token.
       - --no-invoker-iam-check
-      - --update-env-vars=MAIL_IMAP_HOST=${_MAIL_IMAP_HOST},MAIL_IMAP_PORT=${_MAIL_IMAP_PORT},MAIL_SMTP_HOST=${_MAIL_SMTP_HOST},MAIL_SMTP_PORT=${_MAIL_SMTP_PORT},AUTH_ISSUER_URL=${_AUTH_ISSUER_URL},PUBLIC_BASE_URL=${_PUBLIC_BASE_URL}
-      - --update-secrets=MAIL_USERNAME=${_MAIL_USERNAME_SECRET},MAIL_PASSWORD=${_MAIL_PASSWORD_SECRET},MCP_AUTH_TOKEN=${_MCP_AUTH_TOKEN_SECRET}
+      - --update-env-vars=AUTH_ISSUER_URL=${_AUTH_ISSUER_URL},PUBLIC_BASE_URL=${_PUBLIC_BASE_URL}
+      - --update-secrets=MAIL_ACCOUNTS=${_MAIL_ACCOUNTS_SECRET},MCP_AUTH_TOKEN=${_MCP_AUTH_TOKEN_SECRET}
       - --quiet
 
 images:
@@ -69,17 +69,13 @@ substitutions:
   _SERVICE: my-mail-mcp
   _RUNTIME_SERVICE_ACCOUNT: my-mail-mcp-runtime@${PROJECT_ID}.iam.gserviceaccount.com
   _MAX_INSTANCES: '3'
-  _MAIL_IMAP_HOST: imap.mail.yahoo.com
-  _MAIL_IMAP_PORT: '993'
-  _MAIL_SMTP_HOST: smtp.mail.yahoo.com
-  _MAIL_SMTP_PORT: '465'
   # The two values below belong to the repository owner's Auth0 tenant and service.
   # Override both in your trigger or build substitutions (see docs/auth0-setup.md).
   _AUTH_ISSUER_URL: https://dev-fh3rg5w3wwzzwzgs.us.auth0.com/
   _PUBLIC_BASE_URL: https://my-mail-mcp-1080363999711.us-central1.run.app
   # Resolve the latest secret versions when Cloud Run instances start.
-  _MAIL_USERNAME_SECRET: my-mail-mcp-username:latest
-  _MAIL_PASSWORD_SECRET: my-mail-mcp-password:latest
+  # JSON list of mailboxes (see README); hosts, ports and folders are set per account.
+  _MAIL_ACCOUNTS_SECRET: my-mail-mcp-accounts:latest
   _MCP_AUTH_TOKEN_SECRET: my-mail-mcp-token:latest
 
 options:

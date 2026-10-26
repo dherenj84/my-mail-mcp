@@ -54,7 +54,7 @@ class MailboxOperations:
         raise ValueError("Folder does not exist; list folders again")
 
     def _special_folder(self, client, role: str) -> str:
-        override = getattr(self.mail.settings, f"mail_{role}_folder")
+        override = getattr(self.mail.settings, f"{role}_folder")
         folder = override or client.find_special_folder(
             {"archive": ARCHIVE, "trash": TRASH}[role]
         )
@@ -211,8 +211,8 @@ class MailboxOperations:
             b"\\Important",
         }
         configured = [
-            self.mail.settings.mail_archive_folder,
-            self.mail.settings.mail_trash_folder,
+            self.mail.settings.archive_folder,
+            self.mail.settings.trash_folder,
         ]
         configured.extend(
             client.find_special_folder(flag)

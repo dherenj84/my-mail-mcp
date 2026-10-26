@@ -78,7 +78,7 @@ class MailSender:
             raise ValueError(f"At most {MAX_RECIPIENTS} recipients are allowed")
         if len(body) > MAX_BODY_CHARS:
             raise ValueError("Body is too long")
-        sender = self.mail.settings.mail_username
+        sender = self.mail.settings.username
         message = EmailMessage(policy=policy.SMTP)
         try:
             message["From"] = sender
@@ -98,28 +98,23 @@ class MailSender:
         context = ssl.create_default_context()
         context.load_verify_locations(cafile=certifi.where())
         started = time.perf_counter()
-        if settings.mail_smtp_starttls:
-            smtp = smtplib.SMTP(
-                settings.mail_smtp_host, settings.mail_smtp_port, timeout=30
-            )
+        if settings.smtp_starttls:
+            smtp = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30)
         else:
             smtp = smtplib.SMTP_SSL(
-                settings.mail_smtp_host,
-                settings.mail_smtp_port,
+                settings.smtp_host,
+                settings.smtp_port,
                 timeout=30,
                 context=context,
             )
         with smtp:
-            if settings.mail_smtp_starttls:
+            if settings.smtp_starttls:
                 smtp.starttls(context=context)
-            smtp.login(
-                settings.mail_username, settings.mail_password.get_secret_value()
-            )
-            smtp.send_message(
-                message, from_addr=settings.mail_username, to_addrs=recipients
-            )
+            smtp.login(settings.username, settings.password.get_secret_value())
+            smtp.send_message(message, from_addr=settings.username, to_addrs=recipients)
         logger.info(
-            "smtp send=%.2fs recipients=%d",
+            "smtp account=%s send=%.2fs recipients=%d",
+            settings.id,
             time.perf_counter() - started,
             len(recipients),
         )
@@ -133,11 +128,14 @@ class MailSender:
         }
 
     def _save_copy(self, message: EmailMessage) -> bool:
+        if not self.mail.settings.save_sent_copy:
+            # Providers such as Gmail file sent mail themselves; appending would duplicate it.
+            return False
         # The message is already delivered; a failed copy must not look like a failed send.
         try:
             with self.mail.connection() as client:
                 folder = (
-                    self.mail.settings.mail_sent_folder
+                    self.mail.settings.sent_folder
                     or client.find_special_folder(SENT)
                     or "Sent"
                 )
@@ -171,7 +169,7 @@ class MailSender:
         cc: list[str] | None = None,
     ) -> dict:
         original = self._original(folder, uid, uid_validity)
-        me = self.mail.settings.mail_username.casefold()
+        me = self.mail.settings.username.casefold()
         reply_to = original.get_all("Reply-To") or original.get_all("From") or []
         to_list = self._addresses([str(v) for v in reply_to], "original sender")
         cc_list = self._addresses(cc, "cc")

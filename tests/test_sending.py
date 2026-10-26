@@ -22,7 +22,7 @@ def sender(monkeypatch):
             mail_username="test@example.com",
             mail_password="secret",
             mcp_auth_token="x" * 32,
-        )
+        ).accounts()["default"]
     )
     client = MagicMock()
     client.select_folder.return_value = {b"UIDVALIDITY": 5}

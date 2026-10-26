@@ -19,7 +19,7 @@ def mailbox(monkeypatch):
             mcp_auth_token="x" * 32,
             mail_archive_folder=None,
             mail_trash_folder=None,
-        )
+        ).accounts()["default"]
     )
     client = MagicMock()
     client.select_folder.return_value = {b"UIDVALIDITY": 5, b"READ-WRITE": True}
@@ -160,7 +160,7 @@ def test_special_folder_discovery(mailbox, method, destination):
 
 def test_special_folder_override(mailbox):
     ops, client = mailbox
-    ops.mail.settings.mail_archive_folder = "Work"
+    ops.mail.settings.archive_folder = "Work"
     ops.archive_messages("INBOX", [7], 5)
     client.move.assert_called_once_with([7], "Work")
     client.find_special_folder.assert_not_called()

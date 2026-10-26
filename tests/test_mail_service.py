@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from email.message import EmailMessage
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -16,7 +17,7 @@ def mailbox(monkeypatch):
             mail_username="test@example.com",
             mail_password="secret",
             mcp_auth_token="x" * 32,
-        )
+        ).accounts()["default"]
     )
     client = MagicMock()
     client.select_folder.return_value = {b"UIDVALIDITY": 5}
@@ -30,10 +31,25 @@ def test_search_pagination_and_encoded_subject(mailbox):
     service, client = mailbox
     client.search.return_value = [1, 3, 2]
     client.fetch.return_value = {
-        2: {b"ENVELOPE": SimpleNamespace(subject=b"=?utf-8?b?Y2Fmw6k=?="), b"FLAGS": ()}
+        2: {
+            b"ENVELOPE": SimpleNamespace(
+                subject=b"=?utf-8?b?Y2Fmw6k=?=",
+                from_=[SimpleNamespace(name=b"Ann", mailbox=b"ann", host=b"x.com")],
+                date=datetime(2026, 10, 26, 9, 30),
+            ),
+            b"FLAGS": (),
+        }
     }
     result = service.search_messages("INBOX", "invoice", 1, 1)
-    assert result["messages"] == [{"uid": 2, "subject": "caf\u00e9", "flags": []}]
+    assert result["messages"] == [
+        {
+            "uid": 2,
+            "subject": "caf\u00e9",
+            "from": "Ann <ann@x.com>",
+            "date": "2026-10-26T09:30:00",
+            "flags": [],
+        }
+    ]
     assert result["total"] == 3
     assert result["next_offset"] == 2
     assert result["uid_validity"] == 5
@@ -145,3 +161,50 @@ def test_placeholder_credentials_fail_closed(field, value):
     data[field] = value
     with pytest.raises(ValueError):
         Settings(_env_file=None, **data)
+
+
+def test_search_filters_build_one_imap_query(mailbox):
+    service, client = mailbox
+    client.search.return_value = []
+    service.search_messages(
+        "INBOX", "invoice", 20, 0, "2026-10-26", "2026-10-27", "ann@x.com", True
+    )
+    client.search.assert_called_once_with(
+        [
+            "TEXT",
+            "invoice",
+            "SINCE",
+            date(2026, 10, 26),
+            "BEFORE",
+            date(2026, 10, 27),
+            "FROM",
+            "ann@x.com",
+            "UNSEEN",
+        ],
+        charset="UTF-8",
+    )
+
+
+def test_date_only_filter_and_missing_sender(mailbox):
+    service, client = mailbox
+    client.search.return_value = [4]
+    client.fetch.return_value = {
+        4: {
+            b"ENVELOPE": SimpleNamespace(subject=b"Hi", from_=None, date=None),
+            b"FLAGS": (),
+        }
+    }
+    result = service.search_messages("INBOX", "", 20, 0, since="2026-10-26")
+    client.search.assert_called_once_with(
+        ["SINCE", date(2026, 10, 26)], charset="UTF-8"
+    )
+    assert result["messages"][0]["from"] == ""
+    assert result["messages"][0]["date"] is None
+
+
+@pytest.mark.parametrize("field", ["since", "before"])
+def test_invalid_date_rejected_before_connecting(mailbox, field):
+    service, client = mailbox
+    with pytest.raises(ValueError, match=field):
+        service.search_messages("INBOX", "", 20, 0, **{field: "yesterday"})
+    client.select_folder.assert_not_called()

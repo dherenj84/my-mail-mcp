@@ -30,7 +30,7 @@ def test_secrets_are_redacted():
 
 
 def test_stale_uid_rejected_before_fetch(monkeypatch):
-    service = MailService(settings())
+    service = MailService(settings().accounts()["default"])
     client = MagicMock()
     client.select_folder.return_value = {b"UIDVALIDITY": 2}
     context = MagicMock()
@@ -47,6 +47,7 @@ def test_mcp_discovery():
         async with Client(create_server(settings())) as client:
             tools = await client.list_tools()
             assert {tool.name for tool in tools} == {
+                "list_accounts",
                 "list_folders",
                 "search_messages",
                 "read_message",
@@ -64,7 +65,12 @@ def test_mcp_discovery():
                 "reply_message",
                 "forward_message",
             }
-            read_tools = {"list_folders", "search_messages", "read_message"}
+            read_tools = {
+                "list_accounts",
+                "list_folders",
+                "search_messages",
+                "read_message",
+            }
             assert all(
                 tool.annotations.read_only_hint == (tool.name in read_tools)
                 for tool in tools
@@ -127,7 +133,7 @@ def test_authenticated_http_discovery_and_tool_call(monkeypatch):
             },
         )
         assert response.status_code == 200
-        assert len(response.json()["result"]["tools"]) == 16
+        assert len(response.json()["result"]["tools"]) == 17
         response = client.post(
             "/mcp/",
             headers=headers,
@@ -154,7 +160,7 @@ def test_imap_uses_verified_certificate_context(monkeypatch):
 
     factory = MagicMock()
     monkeypatch.setattr(module, "IMAPClient", factory)
-    with MailService(settings()).connection():
+    with MailService(settings().accounts()["default"]).connection():
         pass
     context = factory.call_args.kwargs["ssl_context"]
     assert context.verify_mode == ssl.CERT_REQUIRED
