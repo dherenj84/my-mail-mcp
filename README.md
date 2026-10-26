@@ -23,10 +23,14 @@ against a live Yahoo mailbox; other providers and Cloud Run remain unverified.
 
 ## Tools
 
+With more than one account configured, every tool except `list_accounts` requires an
+`account` id (see [Multiple mailboxes](#multiple-mailboxes)); it is optional with one account.
+
 | Tool | Inputs | Behavior |
 | --- | --- | --- |
-| `list_folders` | None | Lists folders and IMAP flags |
-| `search_messages` | `folder`, `query`, `limit`, `offset` | Text search; empty query lists messages |
+| `list_folders` | optional `account` | Lists folders and IMAP flags |
+| `list_accounts` | None | Lists configured account ids and addresses |
+| `search_messages` | `folder`, `query`, `limit`, `offset`, optional `since`, `before`, `from_address`, `unread_only` | Filtered search returning uid, subject, from, date and flags; empty query lists messages |
 | `read_message` | `folder`, `uid`, `uid_validity` | Reads body and attachment metadata |
 | `update_flags` | `folder`, `uids`, `uid_validity`, optional `read`, `starred`, `answered` | Sets chosen flags without replacing others |
 | `move_messages` | `folder`, `uids`, `uid_validity`, `destination` | Moves to an existing folder |
@@ -47,6 +51,8 @@ confirmation; the server also limits messages to 20 recipients and rejects heade
 injection. Set `MAIL_SENT_FOLDER` if the Sent folder is not detected. The sender
 is always the configured mailbox.
 
+`since` (inclusive) and `before` (exclusive) take `YYYY-MM-DD` and match whole days in the
+mail server's time zone, so "today" is `since=<today>`.
 Search returns newest UID first (mailbox arrival order, not necessarily the
 message's Date header). Search totals reflect the initial UID snapshot; messages
 removed before fetching are omitted and reported in `unavailable_uids`. `limit` is 1–100; use `next_offset` for pagination.
@@ -158,8 +164,9 @@ ignored by Git. Ask Copilot to list folders, then read your latest email.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `MAIL_USERNAME` | Required | Mailbox login |
-| `MAIL_PASSWORD` | Required | App password; keep secret |
+| `MAIL_USERNAME` | Required unless `MAIL_ACCOUNTS` is set | Mailbox login |
+| `MAIL_PASSWORD` | Required unless `MAIL_ACCOUNTS` is set | App password; keep secret |
+| `MAIL_ACCOUNTS` | Unset | JSON list of mailboxes; takes precedence over the flat `MAIL_*` mailbox settings |
 | `MCP_AUTH_TOKEN` | Required, 32+ characters | Client bearer credential |
 | `MAIL_IMAP_HOST` | `imap.mail.yahoo.com` | IMAP hostname |
 | `MAIL_IMAP_PORT` | `993` | IMAP port, implicit TLS required |
@@ -176,6 +183,32 @@ Environment variables take precedence over `.env`. IMAP certificate and hostname
 verification remain enabled, using system trust plus Certifi's CA bundle.
 The server binds to all interfaces; use localhost for local clients and HTTPS
 when exposing it remotely. The bearer credential grants access to this mailbox.
+
+## Multiple mailboxes
+
+Set `MAIL_ACCOUNTS` to a JSON list, on one line in `.env` inside single quotes:
+
+```sh
+MAIL_ACCOUNTS='[
+ {"id":"yahoo","username":"you@yahoo.com","password":"yahoo-app-password"},
+ {"id":"gmail","username":"you@gmail.com","password":"gmail-app-password",
+  "imap_host":"imap.gmail.com","smtp_host":"smtp.gmail.com","save_sent_copy":false}
+]'
+```
+
+Required per account: `id` (letters, digits, `_`, `.`, `-`), `username`, `password`.
+Optional: `imap_host`, `imap_port`, `smtp_host`, `smtp_port`, `smtp_starttls`,
+`archive_folder`, `trash_folder`, `sent_folder` (defaults match Yahoo) and
+`save_sent_copy` (default `true`; set `false` for Gmail, whose SMTP files sent mail itself).
+
+- Call `list_accounts`, then pass `account` to every other tool. Without it the call is
+  rejected, so mail is never touched in the wrong mailbox. UIDs are per account.
+- At most 3 simultaneous IMAP connections per account; extra requests wait up to a minute.
+- Logs show the account id (not the address): `imap account=gmail op=search_messages ...`.
+- Moving or copying between accounts is not supported.
+- Gmail needs 2-Step Verification and an app password. Its folders are labels
+  (`[Gmail]/All Mail`), so archive behaves differently from Yahoo; Gmail has not been
+  tested beyond reading, searching and folder listing.
 
 ## Container / Cloud Run
 
@@ -197,7 +230,7 @@ Start with the [deployment guide](docs/deployment.md), then enable OAuth with
 OAuth for ChatGPT via Auth0 is documented in [Auth0 setup](docs/auth0-setup.md). The
 static bearer token keeps working alongside it.
 
-One mailbox per deployment. Change IMAP settings for another compatible provider;
+A deployment can serve several mailboxes (see below). Change IMAP settings for another compatible provider;
 providers requiring OAuth need an additional authentication implementation.
 Yahoo/provider limits and cloud hosting charges still apply.
 

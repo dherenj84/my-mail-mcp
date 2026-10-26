@@ -57,7 +57,7 @@ steps:
       # Cloud Run admits requests; FastMCP checks the application's bearer token.
       - --no-invoker-iam-check
       - --update-env-vars=MAIL_IMAP_HOST=${_MAIL_IMAP_HOST},MAIL_IMAP_PORT=${_MAIL_IMAP_PORT},MAIL_SMTP_HOST=${_MAIL_SMTP_HOST},MAIL_SMTP_PORT=${_MAIL_SMTP_PORT},AUTH_ISSUER_URL=${_AUTH_ISSUER_URL},PUBLIC_BASE_URL=${_PUBLIC_BASE_URL}
-      - --update-secrets=MAIL_USERNAME=${_MAIL_USERNAME_SECRET},MAIL_PASSWORD=${_MAIL_PASSWORD_SECRET},MCP_AUTH_TOKEN=${_MCP_AUTH_TOKEN_SECRET}
+      - --update-secrets=${_MAIL_SECRETS},MCP_AUTH_TOKEN=${_MCP_AUTH_TOKEN_SECRET}
       - --quiet
 
 images:
@@ -78,8 +78,9 @@ substitutions:
   _AUTH_ISSUER_URL: https://dev-fh3rg5w3wwzzwzgs.us.auth0.com/
   _PUBLIC_BASE_URL: https://my-mail-mcp-1080363999711.us-central1.run.app
   # Resolve the latest secret versions when Cloud Run instances start.
-  _MAIL_USERNAME_SECRET: my-mail-mcp-username:latest
-  _MAIL_PASSWORD_SECRET: my-mail-mcp-password:latest
+  # Single mailbox by default. For several mailboxes store the MAIL_ACCOUNTS JSON in a
+  # secret and set this to MAIL_ACCOUNTS=my-mail-mcp-accounts:latest (it takes precedence).
+  _MAIL_SECRETS: MAIL_USERNAME=my-mail-mcp-username:latest,MAIL_PASSWORD=my-mail-mcp-password:latest
   _MCP_AUTH_TOKEN_SECRET: my-mail-mcp-token:latest
 
 options:

@@ -58,6 +58,9 @@ Create these Secret Manager secrets and add a value to each:
 | `my-mail-mcp-password` | Yahoo app password |
 | `my-mail-mcp-token` | Random MCP bearer token, at least 32 characters |
 
+For several mailboxes, create `my-mail-mcp-accounts` instead of the username and
+password secrets; see [Multiple mailboxes](#multiple-mailboxes).
+
 Use the Secret Manager console, or `gcloud secrets create` followed by
 `gcloud secrets versions add --data-file=/secure/path/to/value-file`. Value files
 should contain the exact value without a trailing newline and stay outside the
@@ -129,6 +132,34 @@ the Cloud Build trigger and store runtime credentials in GCP Secret Manager.
 A Cloud Run repository integration must be configured to use this build file;
 its generated default pipeline may otherwise bypass these checks and settings.
 
+## Multiple mailboxes
+
+Store the `MAIL_ACCOUNTS` JSON (it contains app passwords) in a Secret Manager
+secret named `my-mail-mcp-accounts`, grant the runtime account Secret Accessor on
+it, and set `_MAIL_SECRETS` on the trigger to
+`MAIL_ACCOUNTS=my-mail-mcp-accounts:latest`. The JSON format is in the
+[README](../README.md#multiple-mailboxes). `MAIL_ACCOUNTS` takes precedence, so
+existing `MAIL_USERNAME` / `MAIL_PASSWORD` secrets on the service are ignored and
+can be removed later with `gcloud run services update --remove-secrets`. Commas in
+`_MAIL_SECRETS` need gcloud's alternate-delimiter syntax (`--substitutions=^;^_MAIL_SECRETS=...`) when
+set from the CLI; the console needs nothing special. Per-account hosts, ports and
+folder overrides live in the JSON, so the `_MAIL_*_HOST/PORT` substitutions apply
+only to the single-mailbox setup.
+
+## Deploying a pull-request branch to production
+
+The trigger deploys `main` to the live service, and a deployment takes all traffic.
+To release a reviewed PR, either merge it (the `^main$` trigger deploys it), or
+deploy the branch before merging with the same config:
+
+```sh
+gcloud builds triggers run TRIGGER_NAME --branch=BRANCH --project="$MAIL_GCP_PROJECT" --region="$MAIL_GCP_REGION"
+```
+
+Roll back by sending traffic to the previous revision:
+`gcloud run services update-traffic my-mail-mcp --to-revisions=PREVIOUS=100`.
+Only run this for branches you trust; the build holds production deploy rights.
+
 ## Substitutions
 
 | Key | Default | Purpose |
@@ -144,8 +175,7 @@ its generated default pipeline may otherwise bypass these checks and settings.
 | `_MAIL_SMTP_PORT` | `465` | Provider's SMTP port (sending) |
 | `_AUTH_ISSUER_URL` | Repo owner's Auth0 tenant | **Override.** Your OAuth issuer, or empty to disable OAuth; see [Auth0 setup](auth0-setup.md) |
 | `_PUBLIC_BASE_URL` | Repo owner's Cloud Run URL | **Override.** Your service's public URL, or empty to disable OAuth; the token audience is `<url>/mcp` |
-| `_MAIL_USERNAME_SECRET` | `my-mail-mcp-username:latest` | Secret name and version |
-| `_MAIL_PASSWORD_SECRET` | `my-mail-mcp-password:latest` | Secret name and version |
+| `_MAIL_SECRETS` | `MAIL_USERNAME=my-mail-mcp-username:latest,MAIL_PASSWORD=my-mail-mcp-password:latest` | Mailbox secret references. Replaces the former `_MAIL_USERNAME_SECRET` and `_MAIL_PASSWORD_SECRET`; see [Multiple mailboxes](#multiple-mailboxes) |
 | `_MCP_AUTH_TOKEN_SECRET` | `my-mail-mcp-token:latest` | Secret name and version |
 
 Cloud Run supplies `PORT`; do not configure it as a regular environment variable.
