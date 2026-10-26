@@ -17,6 +17,7 @@ from my_mail_mcp.config import Account
 logger = logging.getLogger(__name__)
 
 # Providers cap simultaneous logins per mailbox; extra requests wait for a free slot.
+# The cap is per process, not shared across Cloud Run instances.
 MAX_CONNECTIONS = 3
 CONNECTION_WAIT_SECONDS = 60
 

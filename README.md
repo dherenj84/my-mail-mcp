@@ -203,7 +203,10 @@ Optional: `imap_host`, `imap_port`, `smtp_host`, `smtp_port`, `smtp_starttls`,
 
 - Call `list_accounts`, then pass `account` to every other tool. Without it the call is
   rejected, so mail is never touched in the wrong mailbox. UIDs are per account.
-- At most 3 simultaneous IMAP connections per account; extra requests wait up to a minute.
+- At most 3 simultaneous IMAP connections per account per server instance; extra requests wait
+  up to a minute. The cap is not shared across instances, so Cloud Run scale-out (up to
+  `_MAX_INSTANCES`, default 3) can reach that many times 3 connections. Lower `_MAX_INSTANCES`
+  if your provider rejects logins during scale-out.
 - Logs show the account id (not the address): `imap account=gmail op=search_messages ...`.
 - Moving or copying between accounts is not supported.
 - Gmail needs 2-Step Verification and an app password. Its folders are labels

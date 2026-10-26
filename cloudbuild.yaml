@@ -76,3 +76,10 @@ substitutions:
   # Resolve the latest secret versions when Cloud Run instances start.
   # JSON list of mailboxes (see README); hosts, ports and folders are set per account.
   _MAIL_ACCOUNTS_SECRET: my-mail-mcp-accounts:latest
+  _MCP_AUTH_TOKEN_SECRET: my-mail-mcp-token:latest
+
+options:
+  dynamicSubstitutions: true
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s

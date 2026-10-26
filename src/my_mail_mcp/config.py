@@ -1,3 +1,4 @@
+import logging
 import re
 
 from pydantic import (
@@ -9,6 +10,8 @@ from pydantic import (
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 def _real_secret(value: SecretStr | None) -> SecretStr | None:
@@ -81,6 +84,23 @@ class Settings(BaseSettings):
     # Both must be set to enable OAuth; the static bearer token keeps working.
     auth_issuer_url: str | None = None
     public_base_url: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def ignore_legacy_mailbox_when_accounts_set(cls, data):
+        # Unused legacy values (e.g. a copied placeholder) must not block valid accounts.
+        if isinstance(data, dict) and data.get("mail_accounts"):
+            ignored = [k for k in ("mail_username", "mail_password") if data.get(k)]
+            if ignored:
+                logger.warning(
+                    "MAIL_ACCOUNTS is set; ignoring MAIL_USERNAME and MAIL_PASSWORD"
+                )
+            data = {
+                k: v
+                for k, v in data.items()
+                if k not in ("mail_username", "mail_password")
+            }
+        return data
 
     @model_validator(mode="after")
     def require_mailboxes(self):

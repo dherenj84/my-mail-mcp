@@ -134,8 +134,6 @@ def create_server(settings: Settings) -> FastMCP:
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
     settings = Settings()
-    if settings.mail_accounts and (settings.mail_username or settings.mail_password):
-        logger.warning("MAIL_ACCOUNTS is set; ignoring MAIL_USERNAME and MAIL_PASSWORD")
     create_server(settings).run(
         transport="http", host="0.0.0.0", port=settings.port, stateless_http=True
     )

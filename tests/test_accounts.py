@@ -166,3 +166,27 @@ def test_mail_accounts_take_precedence_over_flat_settings():
         mcp_auth_token="x" * 32,
     )
     assert list(settings.accounts()) == ["a", "b"]
+
+
+def test_placeholder_legacy_credentials_do_not_block_accounts(caplog):
+    with caplog.at_level("WARNING"):
+        settings = Settings(
+            _env_file=None,
+            mail_accounts=ACCOUNTS,
+            mail_username="you@yahoo.com",
+            mail_password="replace-with-yahoo-app-password",
+            mcp_auth_token="x" * 32,
+        )
+    assert list(settings.accounts()) == ["a", "b"]
+    assert "ignoring MAIL_USERNAME" in caplog.text
+    assert "replace-with" not in caplog.text
+
+
+def test_accounts_still_validate_their_own_credentials():
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            mail_accounts=[{**ACCOUNTS[0], "password": "replace-with-x"}],
+            mail_username="u@yahoo.com",
+            mcp_auth_token="x" * 32,
+        )
