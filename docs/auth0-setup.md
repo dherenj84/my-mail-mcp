@@ -63,6 +63,14 @@ Dashboard → **Applications → APIs → Create API**:
 In the API's settings set the access policy to *Per-app authorization* for
 user-delegated access, and do not grant client (machine-to-machine) access.
 
+Also turn on **Allow Offline Access** (so Auth0 can issue refresh tokens) and
+enable **Refresh Token Rotation** for this API/ChatGPT application. Without this,
+ChatGPT only receives a short-lived access token and cannot renew it silently, so it
+periodically asks you to re-authenticate/reconnect to the connector. With refresh
+tokens, ChatGPT renews access tokens in the background and each refresh issues a new
+refresh token (the old one is invalidated). Existing connections keep the old
+tokens until you disconnect and reconnect the connector once.
+
 ## Step 3: set the default audience
 
 **Settings → General → API Authorization Settings → Default Audience**: enter the same
@@ -140,6 +148,7 @@ For a trigger, set the same substitutions in the trigger. Locally or in Docker, 
 | Redirect mismatch at login | Add the callback shown by ChatGPT (step 5). |
 | Startup error mentioning `AUTH_ISSUER_URL` | Both variables must be set together and use `https`. |
 | `access_denied` / user cannot consent | The application is not authorized for the API (step 6). |
+| ChatGPT periodically asks you to re-authenticate/reconnect | Offline access and refresh token rotation are not enabled (step 2), or the connector was connected before enabling them; disconnect and reconnect once. |
 | Works in ChatGPT but you changed the Cloud Run URL | The audience is tied to the URL; create a new API with the new identifier. |
 
 ## Hardening ideas
