@@ -14,8 +14,7 @@ def mailbox(monkeypatch):
     service = MailService(
         Settings(
             _env_file=None,
-            mail_username="test@example.com",
-            mail_password="secret",
+            mail_accounts=[{"username": "test@example.com", "password": "secret"}],
             mcp_auth_token="x" * 32,
         ).accounts()["default"]
     )
@@ -114,8 +113,9 @@ def test_validation_errors_do_not_disclose_input():
     with pytest.raises(ValueError) as error:
         Settings(
             _env_file=None,
-            mail_username="test@example.com",
-            mail_password="private-password",
+            mail_accounts=[
+                {"username": "test@example.com", "password": "private-password"}
+            ],
             mcp_auth_token="short-secret",
         )
     assert "short-secret" not in str(error.value)
@@ -143,22 +143,22 @@ def test_unknown_subject_charset_does_not_break_search():
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("mail_password", "PLACEHOLDER-REPLACE-WITH-YAHOO-APP-PASSWORD"),
-        ("mail_password", "replace-with-yahoo-app-password"),
-        ("mail_password", "   "),
+        ("password", "PLACEHOLDER-REPLACE-WITH-YAHOO-APP-PASSWORD"),
+        ("password", "replace-with-yahoo-app-password"),
+        ("password", "   "),
         ("mcp_auth_token", "PLACEHOLDER-REPLACE-WITH-A-SECURE-RANDOM-MCP-TOKEN"),
         ("mcp_auth_token", "replace-with-a-long-random-secret"),
-        ("mail_username", "placeholder@example.invalid"),
-        ("mail_username", "   "),
+        ("username", "placeholder@example.invalid"),
+        ("username", "   "),
     ],
 )
 def test_placeholder_credentials_fail_closed(field, value):
-    data = {
-        "mail_username": "test@example.com",
-        "mail_password": "secret",
-        "mcp_auth_token": "x" * 32,
-    }
-    data[field] = value
+    account = {"username": "test@example.com", "password": "secret"}
+    data = {"mail_accounts": [account], "mcp_auth_token": "x" * 32}
+    if field == "mcp_auth_token":
+        data[field] = value
+    else:
+        account[field] = value
     with pytest.raises(ValueError):
         Settings(_env_file=None, **data)
 

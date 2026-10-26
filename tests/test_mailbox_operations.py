@@ -14,11 +14,8 @@ def mailbox(monkeypatch):
     mail = MailService(
         Settings(
             _env_file=None,
-            mail_username="test@example.com",
-            mail_password="secret",
+            mail_accounts=[{"username": "test@example.com", "password": "secret"}],
             mcp_auth_token="x" * 32,
-            mail_archive_folder=None,
-            mail_trash_folder=None,
         ).accounts()["default"]
     )
     client = MagicMock()
@@ -170,7 +167,7 @@ def test_unresolved_archive_requires_configuration(mailbox):
     ops, client = mailbox
     client.find_special_folder.side_effect = None
     client.find_special_folder.return_value = None
-    with pytest.raises(ValueError, match="MAIL_ARCHIVE_FOLDER"):
+    with pytest.raises(ValueError, match="archive_folder"):
         ops.archive_messages("INBOX", [7], 5)
     client.move.assert_not_called()
 
