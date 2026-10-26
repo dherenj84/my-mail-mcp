@@ -19,8 +19,7 @@ def sender(monkeypatch):
     mail = MailService(
         Settings(
             _env_file=None,
-            mail_username="test@example.com",
-            mail_password="secret",
+            mail_accounts=[{"username": "test@example.com", "password": "secret"}],
             mcp_auth_token="x" * 32,
         ).accounts()["default"]
     )

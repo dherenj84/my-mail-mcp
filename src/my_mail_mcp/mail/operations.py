@@ -60,7 +60,7 @@ class MailboxOperations:
         )
         if not folder:
             raise ValueError(
-                f"Could not resolve {role} folder; configure MAIL_{role.upper()}_FOLDER"
+                f"Could not resolve {role} folder; set {role}_folder on the account"
             )
         self._existing_folder(client, folder)
         return folder

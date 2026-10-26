@@ -13,8 +13,9 @@ from my_mail_mcp.server import create_server
 def settings():
     return Settings(
         _env_file=None,
-        mail_username="test@yahoo.com",
-        mail_password="private-mail-password",
+        mail_accounts=[
+            {"username": "test@yahoo.com", "password": "private-mail-password"}
+        ],
         mcp_auth_token="x" * 32,
     )
 
@@ -22,7 +23,10 @@ def settings():
 def test_missing_token_fails(monkeypatch):
     monkeypatch.delenv("MCP_AUTH_TOKEN", raising=False)
     with pytest.raises(ValidationError):
-        Settings(_env_file=None, mail_username="test@yahoo.com", mail_password="secret")
+        Settings(
+            _env_file=None,
+            mail_accounts=[{"username": "test@yahoo.com", "password": "secret"}],
+        )
 
 
 def test_secrets_are_redacted():
@@ -249,8 +253,9 @@ BASE_URL = "https://mail.example.run.app"
 def oauth_settings():
     return Settings(
         _env_file=None,
-        mail_username="test@yahoo.com",
-        mail_password="private-mail-password",
+        mail_accounts=[
+            {"username": "test@yahoo.com", "password": "private-mail-password"}
+        ],
         mcp_auth_token="x" * 32,
         auth_issuer_url=ISSUER,
         public_base_url=BASE_URL,
@@ -260,8 +265,9 @@ def oauth_settings():
 def test_oauth_settings_must_be_complete_and_https():
     base = {
         "_env_file": None,
-        "mail_username": "test@yahoo.com",
-        "mail_password": "private-mail-password",
+        "mail_accounts": [
+            {"username": "test@yahoo.com", "password": "private-mail-password"}
+        ],
         "mcp_auth_token": "x" * 32,
     }
     with pytest.raises(ValidationError):

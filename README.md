@@ -48,7 +48,7 @@ With more than one account configured, every tool except `list_accounts` require
 
 Sending is irreversible. Tools advertise `destructiveHint` so clients can ask for
 confirmation; the server also limits messages to 20 recipients and rejects header
-injection. Set `MAIL_SENT_FOLDER` if the Sent folder is not detected. The sender
+injection. Set `sent_folder` on the account if the Sent folder is not detected. The sender
 is always the configured mailbox.
 
 `since` (inclusive) and `before` (exclusive) take `YYYY-MM-DD` and match whole days in the
@@ -72,7 +72,7 @@ UIDVALIDITY, `uids: [<uid>]`, and `read: true` or `starred: true`.
 Omitted flag fields stay unchanged. To undo a flag change, explicitly pass `false`.
 
 Archive and Trash are resolved through IMAP special-use flags and standard-name
-fallbacks. Set `MAIL_ARCHIVE_FOLDER` or `MAIL_TRASH_FOLDER` if discovery is ambiguous
+fallbacks. Set `archive_folder` or `trash_folder` on the account if discovery is ambiguous
 or fails. These folders must already exist; they are not created automatically.
 Trash is recoverable until the provider purges it. Restore uses current UIDs from
 Trash and defaults to INBOX; the original folder is not recorded.
@@ -164,20 +164,11 @@ ignored by Git. Ask Copilot to list folders, then read your latest email.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `MAIL_USERNAME` | Required unless `MAIL_ACCOUNTS` is set | Mailbox login |
-| `MAIL_PASSWORD` | Required unless `MAIL_ACCOUNTS` is set | App password; keep secret |
-| `MAIL_ACCOUNTS` | Unset | JSON list of mailboxes; takes precedence over the flat `MAIL_*` mailbox settings |
+| `MAIL_ACCOUNTS` | Required | JSON list of mailboxes; per-mailbox host, port and folder settings are keys in each entry (see below) |
 | `MCP_AUTH_TOKEN` | Required, 32+ characters | Client bearer credential |
-| `MAIL_IMAP_HOST` | `imap.mail.yahoo.com` | IMAP hostname |
-| `MAIL_IMAP_PORT` | `993` | IMAP port, implicit TLS required |
-| `MAIL_ARCHIVE_FOLDER` | Auto-detected | Optional exact Archive folder override |
-| `MAIL_TRASH_FOLDER` | Auto-detected | Optional exact Trash folder override |
 | `AUTH_ISSUER_URL` | Unset | Auth0 issuer (with trailing slash); enables OAuth with `PUBLIC_BASE_URL` |
 | `PUBLIC_BASE_URL` | Unset | Public HTTPS base URL; tokens must have audience `<base>/mcp` |
 | `PORT` | `8080` | HTTP listening port |
-| `MAIL_SMTP_HOST` | `smtp.mail.yahoo.com` | Used for sending |
-| `MAIL_SMTP_PORT` | `465` | Used for sending |
-| `MAIL_SMTP_STARTTLS` | `false` | Used for sending |
 
 Environment variables take precedence over `.env`. IMAP certificate and hostname
 verification remain enabled, using system trust plus Certifi's CA bundle.
@@ -229,8 +220,6 @@ Optional: `imap_host`, `imap_port`, `smtp_host`, `smtp_port`, `smtp_starttls`,
 - With several accounts, use the folder names from `list_folders` for that account; they differ
   by provider (`Inbox` on Yahoo, `INBOX` and `[Gmail]/Trash` on Gmail).
 - A bad entry (duplicate or invalid `id`, placeholder password) stops the server at startup.
-- `MAIL_ACCOUNTS` takes precedence over the older `MAIL_USERNAME` / `MAIL_PASSWORD`
-  settings, which are ignored (with a warning) when both exist.
 - At most 3 simultaneous IMAP connections per account per server instance; extra requests wait
   up to a minute. The cap is not shared across instances, so Cloud Run scale-out (up to
   `_MAX_INSTANCES`, default 3) can reach that many times 3 connections. Lower `_MAX_INSTANCES`

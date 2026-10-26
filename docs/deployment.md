@@ -163,9 +163,10 @@ Delete the local file afterwards. Non-Yahoo mailboxes set their hosts in the JSO
 example `"imap_host":"imap.gmail.com","smtp_host":"smtp.gmail.com"`).
 
 Migrating an existing deployment: create the secret with your current mailbox as the
-only entry before deploying. The deployed service may still have old `MAIL_USERNAME` /
-`MAIL_PASSWORD` secrets mounted; they are ignored while `MAIL_ACCOUNTS` is set, and can be
-removed with `gcloud run services update my-mail-mcp --remove-secrets=MAIL_USERNAME,MAIL_PASSWORD`.
+only entry before deploying. Older revisions mounted separate `MAIL_USERNAME` /
+`MAIL_PASSWORD` secrets and host variables; the service no longer reads them, so remove
+them from the Cloud Run service (`gcloud run services update my-mail-mcp
+--remove-secrets=MAIL_USERNAME,MAIL_PASSWORD`) and delete the old secrets.
 
 ## Deploying a pull-request branch to production
 
