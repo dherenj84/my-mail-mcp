@@ -12,10 +12,10 @@ Implemented: authenticated Streamable HTTP MCP, health endpoint, folder listing,
 paginated text search, reading, flag updates, moving/copying, archiving,
 trashing/restoring, permanent deletion, and creating/renaming/deleting user folders.
 Message references include folder, UID and UIDVALIDITY to reject stale identifiers.
-Attachment metadata is included; attachment downloads are not implemented yet.
+Read-only attachment retrieval returns MCP images, text resources, or binary resources.
 Search pagination bounds the returned data, but currently searches all matching UIDs.
 
-Planned: drafts, attachment transfer and GitHub Actions deployment configuration.
+Planned: drafts and GitHub Actions deployment configuration.
 OAuth (Auth0 JWT validation) is implemented; see [Auth0 setup](docs/auth0-setup.md).
 Cloud Build deployment is configured. Sending is implemented but untested against live Yahoo SMTP. Yahoo reading has been manually verified locally through
 VS Code Copilot. Mutation tools have automated coverage but have not been tested
@@ -31,7 +31,8 @@ With more than one account configured, every tool except `list_accounts` require
 | `list_folders` | optional `account` | Lists folders and IMAP flags |
 | `list_accounts` | None | Lists configured account ids and addresses |
 | `search_messages` | `folder`, `query`, `limit`, `offset`, optional `since`, `before`, `from_address`, `unread_only` | Filtered search returning uid, subject, from, date and flags; empty query lists messages |
-| `read_message` | `folder`, `uid`, `uid_validity` | Reads body and attachment metadata |
+| `read_message` | `folder`, `uid`, `uid_validity` | Reads body and attachment metadata, including `attachment_id` |
+| `get_attachment` | `folder`, `uid`, `uid_validity`, `attachment_id`, optional `account` | Retrieves one attachment without changing read status; subject to size limits |
 | `update_flags` | `folder`, `uids`, `uid_validity`, optional `read`, `starred`, `answered` | Sets chosen flags without replacing others |
 | `move_messages` | `folder`, `uids`, `uid_validity`, `destination` | Moves to an existing folder |
 | `copy_messages` | `folder`, `uids`, `uid_validity`, `destination` | Copies while retaining originals |
@@ -59,6 +60,88 @@ removed before fetching are omitted and reported in `unavailable_uids`. `limit` 
 Pass the folder, UID and UIDVALIDITY from search to read a message.
 Reads reject messages over 10 MiB and truncate bodies at 100,000 characters,
 with `body_truncated` indicating truncation. Reading leaves flags unchanged.
+
+## Retrieving attachments
+
+1. Call `search_messages` and keep the account, folder, UID and UIDVALIDITY.
+2. Call `read_message` with that reference. Each attachment includes an opaque
+   `attachment_id`, `filename` (possibly null), and `content_type`.
+3. Call `get_attachment`, for example:
+
+   ```json
+   {"account":"personal","folder":"INBOX","uid":123,"uid_validity":456,"attachment_id":"1"}
+   ```
+
+Use the exact returned ID; filenames are metadata, never file paths or selectors.
+Duplicate, missing, Unicode and path-like filenames are supported. Nested MIME
+attachments and related inline images are listed too. IDs are scoped to the
+account/folder/message/UIDVALIDITY; search and read again after moving a message
+or a stale-reference error.
+
+The result contains JSON metadata (`filename`, `content_type`, `size_bytes`,
+`attachment_id`) in a text block followed by one MCP content block:
+
+| Attachment | MCP representation |
+| --- | --- |
+| PNG, JPEG, GIF, WebP | `image` with base64 `data` and `mimeType` |
+| UTF-8 text, CSV, JSON, XML | Embedded `resource` with `text` and `mimeType` |
+| PDF, Office, ZIP, other images/binary, non-UTF-8 text | Embedded `resource` with base64 `blob` and `mimeType` |
+
+MIME types come from the message and are untrusted. Files are not executed,
+extracted, rendered, or scanned. Transfer encodings are decoded; malformed
+encoding is rejected. Attached emails (`message/rfc822`) are serialized as an
+email file. Nothing is saved to disk, cached, publicly hosted, or sent to an
+external storage service. Resource URIs identify the returned content and are
+not downloadable URLs or `resources/read` endpoints.
+
+`ATTACHMENT_MAX_BYTES` defaults to 5 MiB for the decoded file;
+`ATTACHMENT_MESSAGE_MAX_BYTES` defaults to 10 MiB for its entire raw email.
+Both are positive byte counts and may be set in the environment or local `.env`.
+The implementation downloads a bounded whole message in memory before selecting
+one attachment: even a small attachment in an oversized email is rejected.
+A size preflight and partial `BODY.PEEK[]` fetch cap transfer at the message
+limit plus one byte; the extra byte detects overflow. Oversized files are
+rejected without truncation. Base64 expands binary responses by about one third;
+allow for MIME/parser copies and simultaneous requests when increasing limits.
+These settings do not change `read_message`'s existing 10 MiB limit.
+
+Retrieval uses the existing authentication and account routing, positive UID
+validation, UIDVALIDITY check, read-only selection, and `BODY.PEEK[]`. It never
+sets `\Seen` or changes other flags. Application logs contain operation timing
+and account IDs, not filenames or attachment bytes/base64. Keep protocol debug
+logging off: clients, proxies and tracing systems may log or retain tool results.
+Attachment content is untrusted data and cannot authorize mailbox changes.
+
+### ChatGPT compatibility and limitations
+
+The response uses standard [MCP tool content blocks](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#tool-result)
+and [embedded resources](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#embedded-resources),
+not a base64 string buried in ordinary JSON. FastMCP's explicit `ToolResult`
+avoids duplicating file bytes in `structuredContent`. Authenticated Streamable
+HTTP tests verify the wire format and byte round trips with the locked SDK.
+
+OpenAI's [MCP server guide](https://developers.openai.com/apps-sdk/build/mcp-server)
+describes `content` as text or other MCP content available to the model. Its
+[ChatGPT reference](https://developers.openai.com/apps-sdk/reference) separately
+describes host-managed file references and file upload/download helpers.
+A standard embedded blob is **not a guarantee of native ChatGPT file ingestion**:
+PDF/Office analysis, clickable downloads, Code Interpreter file access, and
+resource rendering depend on the ChatGPT connector/client and model. An
+`attachment://` URI is not an OpenAI file ID. Images use native MCP image blocks;
+image decoding, supported variants and response-size limits remain client-dependent.
+No PDF text extraction, OCR, Office conversion, archive expansion, or external
+file hosting is included. If a client ignores embedded resources, it may expose
+only the metadata; retrieving a PDF successfully does not prove its pages were
+read by the model.
+
+Compatibility investigation reviewed the official sources above; no live
+ChatGPT session or production mailbox was available for end-to-end validation.
+Before relying on a connector, refresh its tool list and test a known unread
+email with a PNG, text file, PDF and Office file: confirm actual content analysis
+and verify the message stays unread. Use a client that supports embedded binary
+resources for byte retrieval when ChatGPT cannot consume a format. Native
+ChatGPT file transfer would require a separately verified host-specific file
+integration; this change adds no external storage or production configuration.
 
 ## Modifying a mailbox
 
@@ -169,6 +252,8 @@ ignored by Git. Ask Copilot to list folders, then read your latest email.
 | `AUTH_ISSUER_URL` | Unset | Auth0 issuer (with trailing slash); enables OAuth with `PUBLIC_BASE_URL` |
 | `PUBLIC_BASE_URL` | Unset | Public HTTPS base URL; tokens must have audience `<base>/mcp` |
 | `PORT` | `8080` | HTTP listening port |
+| `ATTACHMENT_MAX_BYTES` | `5242880` (5 MiB) | Maximum decoded attachment size; positive bytes |
+| `ATTACHMENT_MESSAGE_MAX_BYTES` | `10485760` (10 MiB) | Maximum raw email size for attachment retrieval; positive bytes |
 
 Environment variables take precedence over `.env`. IMAP certificate and hostname
 verification remain enabled, using system trust plus Certifi's CA bundle.

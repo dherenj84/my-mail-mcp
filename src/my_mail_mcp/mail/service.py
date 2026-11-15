@@ -1,4 +1,5 @@
 import logging
+import re
 import ssl
 import sys
 import threading
@@ -23,8 +24,16 @@ CONNECTION_WAIT_SECONDS = 60
 
 
 class MailService:
-    def __init__(self, settings: Account):
+    def __init__(
+        self,
+        settings: Account,
+        *,
+        attachment_max_bytes: int = 5 * 1024 * 1024,
+        attachment_message_max_bytes: int = 10 * 1024 * 1024,
+    ):
         self.settings = settings
+        self.attachment_max_bytes = attachment_max_bytes
+        self.attachment_message_max_bytes = attachment_message_max_bytes
         self._slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
 
     @contextmanager
@@ -170,7 +179,9 @@ class MailService:
             # A malformed charset declaration must not break the whole search.
             return text
 
-    def read_message(self, folder: str, uid: int, uid_validity: int) -> dict:
+    def _load_message(
+        self, folder: str, uid: int, uid_validity: int, *, attachment: bool = False
+    ):
         if uid <= 0:
             raise ValueError("uid must be positive")
         with self.connection() as client:
@@ -180,30 +191,98 @@ class MailService:
             sizes = client.fetch([uid], ["RFC822.SIZE"])
             if uid not in sizes:
                 raise ValueError("Message not found")
-            if sizes[uid][b"RFC822.SIZE"] > 10 * 1024 * 1024:
+            limit = (
+                self.attachment_message_max_bytes if attachment else 10 * 1024 * 1024
+            )
+            if sizes[uid][b"RFC822.SIZE"] > limit:
+                if attachment:
+                    raise ValueError("Message exceeds attachment message-size limit")
                 raise ValueError("Message exceeds the initial 10 MiB read limit")
-            raw = client.fetch([uid], ["BODY.PEEK[]"])
+            # Partial PEEK bounds transfer even if the reported size is inaccurate.
+            query = f"BODY.PEEK[]<0.{limit + 1}>" if attachment else "BODY.PEEK[]"
+            raw = client.fetch([uid], [query])
+            if attachment and uid in raw and b"BODY[]<0>" in raw[uid]:
+                raw[uid][b"BODY[]"] = raw[uid][b"BODY[]<0>"]
             if uid not in raw or b"BODY[]" not in raw[uid]:
                 raise ValueError("Message no longer available; search again")
-            message = BytesParser(policy=policy.default).parsebytes(raw[uid][b"BODY[]"])
-            body = message.get_body(preferencelist=("plain", "html"))
-            content = body.get_content() if body else ""
-            return {
-                "uid": uid,
-                "folder": folder,
-                "uid_validity": uid_validity,
-                "subject": str(message.get("Subject", "")),
-                "from": str(message.get("From", "")),
-                "to": str(message.get("To", "")),
-                "date": str(message.get("Date", "")),
-                "body": content[:100000],
-                "body_truncated": len(content) > 100000,
-                "body_content_type": body.get_content_type() if body else None,
-                "attachments": [
-                    {
-                        "filename": part.get_filename(),
-                        "content_type": part.get_content_type(),
-                    }
-                    for part in message.iter_attachments()
-                ],
-            }
+            data = raw[uid][b"BODY[]"]
+            if len(data) > limit:
+                raise ValueError("Message exceeds size limit")
+            return BytesParser(policy=policy.default).parsebytes(data)
+
+    @staticmethod
+    def _attachments(message):
+        # Opaque, deterministic IDs; filenames are never selectors or paths.
+        def leaves(part):
+            if part.get_content_type() == "message/rfc822" or not part.is_multipart():
+                yield part
+            else:
+                for child in part.iter_parts():
+                    yield from leaves(child)
+
+        def collect(part):
+            if part.get_content_disposition() == "attachment" or part.get_filename():
+                yield from leaves(part)
+                return
+            selected = list(part.iter_attachments())
+            for child in selected:
+                yield from leaves(child)
+            if part.is_multipart():
+                for child in part.iter_parts():
+                    if child not in selected and child.is_multipart():
+                        yield from collect(child)
+
+        for index, part in enumerate(collect(message), 1):
+            yield str(index), part
+
+    def get_attachment(
+        self, folder: str, uid: int, uid_validity: int, attachment_id: str
+    ) -> tuple[str | None, str, bytes]:
+        if not re.fullmatch(r"[1-9][0-9]*", attachment_id):
+            raise ValueError(
+                "Invalid attachment_id; use read_message attachment metadata"
+            )
+        message = self._load_message(folder, uid, uid_validity, attachment=True)
+        for identifier, part in self._attachments(message):
+            if identifier != attachment_id:
+                continue
+            encoding = (
+                str(part.get("Content-Transfer-Encoding", "7bit")).strip().lower()
+            )
+            if encoding not in {"7bit", "8bit", "binary", "base64", "quoted-printable"}:
+                raise ValueError("Attachment encoding is invalid or unsupported")
+            if part.get_content_type() == "message/rfc822":
+                data = part.get_payload(0).as_bytes(policy=policy.default)
+            else:
+                data = part.get_payload(decode=True)
+            if data is None or part.defects:
+                raise ValueError("Attachment encoding is invalid or unsupported")
+            if len(data) > self.attachment_max_bytes:
+                raise ValueError("Attachment exceeds decoded file-size limit")
+            return part.get_filename(), part.get_content_type(), data
+        raise ValueError("Attachment not found; read_message again")
+
+    def read_message(self, folder: str, uid: int, uid_validity: int) -> dict:
+        message = self._load_message(folder, uid, uid_validity)
+        body = message.get_body(preferencelist=("plain", "html"))
+        content = body.get_content() if body else ""
+        return {
+            "uid": uid,
+            "folder": folder,
+            "uid_validity": uid_validity,
+            "subject": str(message.get("Subject", "")),
+            "from": str(message.get("From", "")),
+            "to": str(message.get("To", "")),
+            "date": str(message.get("Date", "")),
+            "body": content[:100000],
+            "body_truncated": len(content) > 100000,
+            "body_content_type": body.get_content_type() if body else None,
+            "attachments": [
+                {
+                    "attachment_id": identifier,
+                    "filename": part.get_filename(),
+                    "content_type": part.get_content_type(),
+                }
+                for identifier, part in self._attachments(message)
+            ],
+        }

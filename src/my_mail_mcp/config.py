@@ -66,6 +66,8 @@ class Settings(BaseSettings):
     # JSON list of mailboxes; see the README "Multiple mailboxes" section.
     mail_accounts: list[Account] = []
     mcp_auth_token: SecretStr = Field(min_length=32)
+    attachment_max_bytes: int = Field(default=5 * 1024 * 1024, gt=0)
+    attachment_message_max_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
     port: int = Field(default=8080, ge=1, le=65535)
     # Both must be set to enable OAuth; the static bearer token keeps working.
     auth_issuer_url: str | None = None

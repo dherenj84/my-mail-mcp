@@ -88,7 +88,11 @@ def test_read_uses_peek_and_returns_attachment_metadata(mailbox):
     assert result["body"].strip() == "Body"
     assert not result["body_truncated"]
     assert result["attachments"] == [
-        {"filename": "test.pdf", "content_type": "application/pdf"}
+        {
+            "attachment_id": "1",
+            "filename": "test.pdf",
+            "content_type": "application/pdf",
+        }
     ]
     assert client.fetch.call_args_list[1].args == ([7], ["BODY.PEEK[]"])
     client.select_folder.assert_called_once_with("INBOX", readonly=True)
