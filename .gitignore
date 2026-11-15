@@ -17,3 +17,5 @@ dist/
 
 # Temporary Google GitHub Actions authentication credentials
 gha-creds-*.json
+
+.codex/
