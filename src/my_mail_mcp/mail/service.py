@@ -252,8 +252,18 @@ class MailService:
             if encoding not in {"7bit", "8bit", "binary", "base64", "quoted-printable"}:
                 raise ValueError("Attachment encoding is invalid or unsupported")
             if part.get_content_type() == "message/rfc822":
+                if encoding not in {"7bit", "8bit", "binary"}:
+                    raise ValueError("Attachment encoding is invalid or unsupported")
                 data = part.get_payload(0).as_bytes(policy=policy.default)
             else:
+                if encoding == "quoted-printable":
+                    payload = part.get_payload()
+                    if not isinstance(payload, str) or re.search(
+                        r"=(?![0-9A-Fa-f]{2}|[ \t]*\r?\n)", payload
+                    ):
+                        raise ValueError(
+                            "Attachment encoding is invalid or unsupported"
+                        )
                 data = part.get_payload(decode=True)
             if data is None or part.defects:
                 raise ValueError("Attachment encoding is invalid or unsupported")
